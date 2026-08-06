@@ -35,7 +35,7 @@ export default function Home() {
           accuracy: result.coords.accuracy,
           capturedAt: result.timestamp,
         });
-        setStatus(`Location captured with ±${Math.round(result.coords.accuracy)} m accuracy.`);
+        setStatus(`Live location captured with ±${Math.round(result.coords.accuracy)} m accuracy.`);
       },
       (error) => setStatus(error.message || "Unable to get your location."),
       { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 },
@@ -50,7 +50,7 @@ export default function Home() {
     }
 
     setBusy(true);
-    setStatus("Validating and saving attendance…");
+    setStatus("Detecting your address and saving attendance…");
     try {
       const response = await fetch("/api/attendance", {
         method: "POST",
@@ -66,7 +66,7 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Attendance submission failed.");
 
-      setStatus(`Success: ${attendanceType} recorded. You were ${data.distance} m from ${data.siteName}.`);
+      setStatus(`Success: ${attendanceType} recorded at ${data.detectedAddress}.`);
       setPosition(null);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Attendance submission failed.");
@@ -80,7 +80,9 @@ export default function Home() {
       <section className="card">
         <div className="eyebrow">LARK ATTENDANCE</div>
         <h1>GPS Check-In / Check-Out</h1>
-        <p className="intro">You can submit only while physically inside the approved workplace radius.</p>
+        <p className="intro">
+          Capture your current live location, then submit your attendance. Your street or place name will be detected automatically.
+        </p>
 
         <form onSubmit={submit}>
           <label>
@@ -120,8 +122,12 @@ export default function Home() {
           </button>
         </form>
 
-        <div className="status" aria-live="polite">{status || "Location has not been captured."}</div>
-        <p className="privacy">Your location is captured only when you tap the location button and submit attendance.</p>
+        <div className="status" aria-live="polite">
+          {status || "Location has not been captured."}
+        </div>
+        <p className="privacy">
+          Your live location is captured only when you tap the location button and submit attendance.
+        </p>
       </section>
     </main>
   );
