@@ -1,0 +1,22 @@
+:root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #f4f6f8; color: #172033; }
+button, input { font: inherit; }
+.shell { min-height: 100dvh; padding: 24px 16px; display: grid; place-items: center; }
+.card { width: min(100%, 460px); background: white; border-radius: 20px; padding: 28px; box-shadow: 0 14px 40px rgba(23,32,51,.10); }
+.eyebrow { font-size: 12px; letter-spacing: .15em; font-weight: 700; color: #5b6b85; }
+h1 { margin: 8px 0 10px; font-size: 28px; }
+.intro { margin: 0 0 24px; color: #5b6474; line-height: 1.5; }
+form { display: grid; gap: 16px; }
+label { display: grid; gap: 7px; font-size: 14px; font-weight: 700; }
+input { width: 100%; border: 1px solid #d8dee8; border-radius: 12px; padding: 12px 14px; outline: none; }
+input:focus { border-color: #3370ff; box-shadow: 0 0 0 3px rgba(51,112,255,.12); }
+.segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f0f2f5; padding: 5px; border-radius: 12px; }
+.segmented button { border: 0; border-radius: 9px; padding: 11px; background: transparent; cursor: pointer; }
+.segmented button.active { background: white; box-shadow: 0 2px 8px rgba(23,32,51,.08); font-weight: 700; }
+.primary, .secondary { border-radius: 12px; padding: 13px 16px; font-weight: 700; cursor: pointer; }
+.primary { border: 0; background: #3370ff; color: white; }
+.secondary { border: 1px solid #cdd5e1; background: white; color: #263247; }
+button:disabled { cursor: not-allowed; opacity: .55; }
+.status { margin-top: 18px; border-radius: 12px; padding: 12px 14px; background: #f5f7fa; color: #38445a; line-height: 1.45; }
+.privacy { margin: 14px 0 0; color: #7a8495; font-size: 12px; line-height: 1.45; }
