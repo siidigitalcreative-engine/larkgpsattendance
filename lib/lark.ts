@@ -2,16 +2,19 @@ type TenantTokenResponse = {
   code: number;
   msg: string;
   tenant_access_token?: string;
-  expire?: number;
+};
+
+type EmployeeRecord = {
+  employeeId: string;
+  employeeName: string;
+  department?: string;
+  active: boolean;
 };
 
 export async function getTenantAccessToken(): Promise<string> {
   const appId = process.env.LARK_APP_ID;
   const appSecret = process.env.LARK_APP_SECRET;
-
-  if (!appId || !appSecret) {
-    throw new Error("Missing LARK_APP_ID or LARK_APP_SECRET");
-  }
+  if (!appId || !appSecret) throw new Error("Missing LARK_APP_ID or LARK_APP_SECRET");
 
   const response = await fetch(
     "https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal",
@@ -27,8 +30,77 @@ export async function getTenantAccessToken(): Promise<string> {
   if (!response.ok || data.code !== 0 || !data.tenant_access_token) {
     throw new Error(`Lark token error: ${data.msg || response.statusText}`);
   }
-
   return data.tenant_access_token;
+}
+
+function getBaseConfig() {
+  const appToken = process.env.LARK_BASE_APP_TOKEN;
+  if (!appToken) throw new Error("Missing LARK_BASE_APP_TOKEN");
+  return { appToken };
+}
+
+function parseActive(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return ["true", "yes", "active", "1"].includes(value.toLowerCase());
+  if (typeof value === "number") return value === 1;
+  return false;
+}
+
+export async function listActiveEmployees(): Promise<EmployeeRecord[]> {
+  const tableId = process.env.LARK_EMPLOYEES_TABLE_ID;
+  if (!tableId) throw new Error("Missing LARK_EMPLOYEES_TABLE_ID");
+  const { appToken } = getBaseConfig();
+  const token = await getTenantAccessToken();
+
+  const employees: EmployeeRecord[] = [];
+  let pageToken = "";
+
+  do {
+    const url = new URL(
+      `https://open.larksuite.com/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records`,
+    );
+    url.searchParams.set("page_size", "500");
+    if (pageToken) url.searchParams.set("page_token", pageToken);
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    const data = await response.json();
+    if (!response.ok || data.code !== 0) {
+      throw new Error(`Lark Employees error: ${data.msg || response.statusText}`);
+    }
+
+    for (const item of data.data?.items ?? []) {
+      const fields = item.fields ?? {};
+      const employeeId = String(fields["Employee ID"] ?? "").trim();
+      const employeeName = String(fields["Full Name"] ?? "").trim();
+      const department = String(fields["Department"] ?? "").trim();
+      const active = parseActive(fields.Active);
+      if (employeeId && employeeName && active) {
+        employees.push({ employeeId, employeeName, department: department || undefined, active });
+      }
+    }
+
+    pageToken = data.data?.has_more ? String(data.data?.page_token ?? "") : "";
+  } while (pageToken);
+
+  return employees.sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+}
+
+export async function verifyEmployee(input: {
+  employeeId: string;
+  employeeName: string;
+}): Promise<EmployeeRecord | null> {
+  const normalize = (value: string) => value.trim().toLowerCase();
+  const employees = await listActiveEmployees();
+  return (
+    employees.find(
+      (employee) =>
+        normalize(employee.employeeId) === normalize(input.employeeId) &&
+        normalize(employee.employeeName) === normalize(input.employeeName),
+    ) ?? null
+  );
 }
 
 type AttendanceRecord = {
@@ -44,12 +116,9 @@ type AttendanceRecord = {
 };
 
 export async function createAttendanceRecord(record: AttendanceRecord): Promise<string> {
-  const appToken = process.env.LARK_BASE_APP_TOKEN;
   const tableId = process.env.LARK_ATTENDANCE_TABLE_ID;
-  if (!appToken || !tableId) {
-    throw new Error("Missing LARK_BASE_APP_TOKEN or LARK_ATTENDANCE_TABLE_ID");
-  }
-
+  if (!tableId) throw new Error("Missing LARK_ATTENDANCE_TABLE_ID");
+  const { appToken } = getBaseConfig();
   const token = await getTenantAccessToken();
   const attendanceId = `${record.employeeId}-${record.attendanceType === "Check In" ? "IN" : "OUT"}-${record.submittedAt}`;
 
@@ -72,10 +141,7 @@ export async function createAttendanceRecord(record: AttendanceRecord): Promise<
           Longitude: record.longitude,
           "GPS Accuracy (m)": Math.round(record.accuracy),
           "Detected Address": record.detectedAddress,
-          "Map Link": {
-            link: record.mapLink,
-            text: "View Location",
-          },
+          "Map Link": { link: record.mapLink, text: "View Location" },
           "Location Status": "Live GPS captured",
           "Submission Status": "Accepted",
         },
@@ -88,21 +154,10 @@ export async function createAttendanceRecord(record: AttendanceRecord): Promise<
   if (!response.ok || data.code !== 0) {
     throw new Error(`Lark Base error: ${data.msg || response.statusText}`);
   }
-
   return data.data?.record?.record_id ?? "";
 }
 
-export async function sendGroupNotification(input: {
-  employeeName: string;
-  employeeId: string;
-  attendanceType: string;
-  latitude: number;
-  longitude: number;
-  accuracy: number;
-  detectedAddress: string;
-  mapLink: string;
-  submittedAt: number;
-}): Promise<void> {
+export async function sendGroupNotification(input: AttendanceRecord): Promise<void> {
   const webhook = process.env.LARK_GROUP_WEBHOOK;
   if (!webhook) return;
 
@@ -112,7 +167,6 @@ export async function sendGroupNotification(input: {
     day: "2-digit",
     year: "numeric",
   }).format(new Date(input.submittedAt));
-
   const time = new Intl.DateTimeFormat("en-PH", {
     timeZone: "Asia/Manila",
     hour: "2-digit",
@@ -122,13 +176,12 @@ export async function sendGroupNotification(input: {
 
   const isCheckIn = input.attendanceType === "Check In";
   const actionLabel = isCheckIn ? "Sign in" : "Sign out";
-  const template = isCheckIn ? "blue" : "orange";
   const detailsBaseUrl = process.env.APP_PUBLIC_URL || "";
 
   const card = {
     config: { wide_screen_mode: true, enable_forward: true },
     header: {
-      template,
+      template: isCheckIn ? "blue" : "orange",
       title: { tag: "plain_text", content: actionLabel },
     },
     elements: [
@@ -142,37 +195,22 @@ export async function sendGroupNotification(input: {
       {
         tag: "div",
         fields: [
-          {
-            is_short: true,
-            text: { tag: "lark_md", content: `**${actionLabel} Date**\n${date}` },
-          },
-          {
-            is_short: true,
-            text: { tag: "lark_md", content: `**${actionLabel} Time**\n${time}` },
-          },
+          { is_short: true, text: { tag: "lark_md", content: `**${actionLabel} Date**\n${date}` } },
+          { is_short: true, text: { tag: "lark_md", content: `**${actionLabel} Time**\n${time}` } },
         ],
       },
       { tag: "hr" },
       {
         tag: "div",
-        text: {
-          tag: "lark_md",
-          content: `**Detected location**\n${input.detectedAddress}`,
-        },
+        text: { tag: "lark_md", content: `**Detected location**\n${input.detectedAddress}` },
       },
       {
         tag: "div",
         fields: [
+          { is_short: true, text: { tag: "lark_md", content: "**Location capture**\n✅ Live GPS" } },
           {
             is_short: true,
-            text: { tag: "lark_md", content: "**Location capture**\n✅ Live GPS" },
-          },
-          {
-            is_short: true,
-            text: {
-              tag: "lark_md",
-              content: `**GPS accuracy**\n±${Math.round(input.accuracy)} meters`,
-            },
+            text: { tag: "lark_md", content: `**GPS accuracy**\n±${Math.round(input.accuracy)} meters` },
           },
         ],
       },
@@ -199,12 +237,7 @@ export async function sendGroupNotification(input: {
       },
       {
         tag: "note",
-        elements: [
-          {
-            tag: "plain_text",
-            content: "Live-location attendance record saved to Lark Base.",
-          },
-        ],
+        elements: [{ tag: "plain_text", content: "Verified employee attendance saved to Lark Base." }],
       },
     ],
   };
@@ -215,19 +248,14 @@ export async function sendGroupNotification(input: {
     body: JSON.stringify({ msg_type: "interactive", card }),
     cache: "no-store",
   });
-
   const responseText = await response.text();
-  if (!response.ok) {
-    throw new Error(`Lark group webhook error: ${response.status} ${responseText}`);
-  }
-
+  if (!response.ok) throw new Error(`Lark group webhook error: ${response.status} ${responseText}`);
   try {
     const data = JSON.parse(responseText) as { code?: number; msg?: string };
     if (typeof data.code === "number" && data.code !== 0) {
       throw new Error(`Lark group webhook error: ${data.msg || data.code}`);
     }
   } catch (error) {
-    if (error instanceof SyntaxError) return;
-    throw error;
+    if (!(error instanceof SyntaxError)) throw error;
   }
 }
