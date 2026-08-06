@@ -84,6 +84,8 @@ export async function POST(request: Request) {
       employeeId: input.employeeId,
       attendanceType: input.attendanceType,
       siteName,
+      latitude: input.latitude,
+      longitude: input.longitude,
       distance,
       accuracy: input.accuracy,
       submittedAt,
