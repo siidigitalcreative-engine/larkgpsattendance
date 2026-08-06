@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { distanceMeters } from "@/lib/geo";
 import { createAttendanceRecord, sendGroupNotification } from "@/lib/lark";
 
 export const runtime = "nodejs";
@@ -16,22 +15,43 @@ const schema = z.object({
   capturedAt: z.number().int().positive(),
 });
 
+async function reverseGeocode(latitude: number, longitude: number): Promise<string> {
+  const url = new URL("https://nominatim.openstreetmap.org/reverse");
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("lat", String(latitude));
+  url.searchParams.set("lon", String(longitude));
+  url.searchParams.set("zoom", "18");
+  url.searchParams.set("addressdetails", "1");
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Sunbeams-Lark-Attendance/1.0",
+        "Accept-Language": "en",
+      },
+      cache: "no-store",
+    });
+
+    if (!response.ok) return "Address unavailable";
+    const data = (await response.json()) as { display_name?: string };
+    return data.display_name?.trim() || "Address unavailable";
+  } catch {
+    return "Address unavailable";
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const input = schema.parse(await request.json());
     const expectedCode = process.env.ATTENDANCE_ACCESS_CODE;
+
     if (!expectedCode || input.accessCode !== expectedCode) {
       return NextResponse.json({ error: "Invalid access code." }, { status: 401 });
     }
 
-    const siteLatitude = Number(process.env.SITE_LATITUDE);
-    const siteLongitude = Number(process.env.SITE_LONGITUDE);
-    const radius = Number(process.env.SITE_RADIUS_METERS ?? 100);
-    const maxAccuracy = Number(process.env.MAX_GPS_ACCURACY_METERS ?? 75);
-    const siteName = process.env.SITE_NAME ?? "Approved site";
-
-    if (![siteLatitude, siteLongitude, radius, maxAccuracy].every(Number.isFinite)) {
-      throw new Error("Invalid site configuration");
+    const maxAccuracy = Number(process.env.MAX_GPS_ACCURACY_METERS ?? 100);
+    if (!Number.isFinite(maxAccuracy)) {
+      throw new Error("Invalid MAX_GPS_ACCURACY_METERS configuration.");
     }
 
     const ageMs = Date.now() - input.capturedAt;
@@ -44,29 +64,17 @@ export async function POST(request: Request) {
 
     if (input.accuracy > maxAccuracy) {
       return NextResponse.json(
-        { error: `GPS accuracy is too weak (±${Math.round(input.accuracy)} m). Move outdoors and retry.` },
+        {
+          error: `GPS accuracy is too weak (±${Math.round(input.accuracy)} m). Move near a window or outdoors and retry.`,
+        },
         { status: 400 },
       );
     }
 
-    const distance = distanceMeters(
-      input.latitude,
-      input.longitude,
-      siteLatitude,
-      siteLongitude,
-    );
-
-    if (distance > radius) {
-      return NextResponse.json(
-        {
-          error: `You are ${Math.round(distance)} m from ${siteName}. Check-in is allowed only within ${radius} m.`,
-          distance: Math.round(distance),
-        },
-        { status: 403 },
-      );
-    }
-
     const submittedAt = Date.now();
+    const detectedAddress = await reverseGeocode(input.latitude, input.longitude);
+    const mapLink = `https://www.google.com/maps?q=${input.latitude},${input.longitude}`;
+
     const recordId = await createAttendanceRecord({
       employeeId: input.employeeId,
       employeeName: input.employeeName,
@@ -74,8 +82,8 @@ export async function POST(request: Request) {
       latitude: input.latitude,
       longitude: input.longitude,
       accuracy: input.accuracy,
-      distance,
-      siteName,
+      detectedAddress,
+      mapLink,
       submittedAt,
     });
 
@@ -83,19 +91,18 @@ export async function POST(request: Request) {
       employeeName: input.employeeName,
       employeeId: input.employeeId,
       attendanceType: input.attendanceType,
-      siteName,
       latitude: input.latitude,
       longitude: input.longitude,
-      distance,
       accuracy: input.accuracy,
+      detectedAddress,
+      mapLink,
       submittedAt,
     });
 
     return NextResponse.json({
       ok: true,
       recordId,
-      distance: Math.round(distance),
-      siteName,
+      detectedAddress,
       submittedAt,
     });
   } catch (error) {
