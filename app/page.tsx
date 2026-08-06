@@ -83,7 +83,7 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Verification failed.");
       setEmployee(data.employee);
-      setStatus("Identity verified. You will stay signed in on this device for 30 days.");
+      setStatus("Identity verified. You will stay signed in on this device until you sign out or clear browser data.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Verification failed.");
     } finally {
@@ -180,21 +180,32 @@ export default function Home() {
                 />
               </label>
 
-              <label>
-                Select your name
-                <select
-                  value={selectedName}
-                  onChange={(event) => setSelectedName(event.target.value)}
-                  required
-                >
-                  <option value="">Select employee</option>
-                  {filteredEmployees.map((item) => (
-                    <option key={`${item.employeeName}-${item.department || ""}`} value={item.employeeName}>
-                      {item.employeeName}{item.department ? ` — ${item.department}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="employee-results" role="listbox" aria-label="Employee search results">
+                {search.trim() && filteredEmployees.length === 0 ? (
+                  <div className="employee-empty">No matching employee found.</div>
+                ) : (
+                  filteredEmployees.map((item) => {
+                    const isSelected = selectedName === item.employeeName;
+                    return (
+                      <button
+                        type="button"
+                        key={`${item.employeeName}-${item.department || ""}`}
+                        className={`employee-option${isSelected ? " selected" : ""}`}
+                        onClick={() => {
+                          setSelectedName(item.employeeName);
+                          setSearch(item.employeeName);
+                        }}
+                        aria-selected={isSelected}
+                      >
+                        <span className="employee-option-name">{item.employeeName}</span>
+                        {item.department ? (
+                          <span className="employee-option-department">{item.department}</span>
+                        ) : null}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
 
               <label>
                 Employee ID
@@ -252,7 +263,7 @@ export default function Home() {
           {status}
         </div>
         <p className="privacy">
-          Your identity is remembered on this browser for 30 days. Your live location is captured only when you tap the location button.
+          Your identity stays signed in on this browser until you sign out or clear browser data. Your live location is captured only when you tap the location button.
         </p>
       </section>
     </main>
