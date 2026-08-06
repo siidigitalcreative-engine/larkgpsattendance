@@ -72,7 +72,10 @@ export async function createAttendanceRecord(record: AttendanceRecord): Promise<
           Longitude: record.longitude,
           "GPS Accuracy (m)": Math.round(record.accuracy),
           "Detected Address": record.detectedAddress,
-          "Map Link": {\n            link: record.mapLink,\n            text: "View Location",\n          },
+          "Map Link": {
+            link: record.mapLink,
+            text: "View Location",
+          },
           "Location Status": "Live GPS captured",
           "Submission Status": "Accepted",
         },
