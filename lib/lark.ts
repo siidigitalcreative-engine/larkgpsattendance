@@ -38,8 +38,8 @@ type AttendanceRecord = {
   latitude: number;
   longitude: number;
   accuracy: number;
-  distance: number;
-  siteName: string;
+  detectedAddress: string;
+  mapLink: string;
   submittedAt: number;
 };
 
@@ -51,6 +51,8 @@ export async function createAttendanceRecord(record: AttendanceRecord): Promise<
   }
 
   const token = await getTenantAccessToken();
+  const attendanceId = `${record.employeeId}-${record.attendanceType === "Check In" ? "IN" : "OUT"}-${record.submittedAt}`;
+
   const response = await fetch(
     `https://open.larksuite.com/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records`,
     {
@@ -61,16 +63,17 @@ export async function createAttendanceRecord(record: AttendanceRecord): Promise<
       },
       body: JSON.stringify({
         fields: {
+          "Attendance ID": attendanceId,
           "Employee ID": record.employeeId,
           "Employee Name": record.employeeName,
           "Attendance Type": record.attendanceType,
-          "Site": record.siteName,
           "Submitted At": record.submittedAt,
-          "Latitude": record.latitude,
-          "Longitude": record.longitude,
+          Latitude: record.latitude,
+          Longitude: record.longitude,
           "GPS Accuracy (m)": Math.round(record.accuracy),
-          "Distance from Site (m)": Math.round(record.distance),
-          "Location Status": "Inside approved location",
+          "Detected Address": record.detectedAddress,
+          "Map Link": record.mapLink,
+          "Location Status": "Live GPS captured",
           "Submission Status": "Accepted",
         },
       }),
@@ -90,11 +93,11 @@ export async function sendGroupNotification(input: {
   employeeName: string;
   employeeId: string;
   attendanceType: string;
-  siteName: string;
   latitude: number;
   longitude: number;
-  distance: number;
   accuracy: number;
+  detectedAddress: string;
+  mapLink: string;
   submittedAt: number;
 }): Promise<void> {
   const webhook = process.env.LARK_GROUP_WEBHOOK;
@@ -117,27 +120,20 @@ export async function sendGroupNotification(input: {
   const isCheckIn = input.attendanceType === "Check In";
   const actionLabel = isCheckIn ? "Sign in" : "Sign out";
   const template = isCheckIn ? "blue" : "orange";
-  const mapUrl = `https://www.google.com/maps?q=${input.latitude},${input.longitude}`;
-  const detailsBaseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_PUBLIC_URL || "";
+  const detailsBaseUrl = process.env.APP_PUBLIC_URL || "";
 
   const card = {
-    config: {
-      wide_screen_mode: true,
-      enable_forward: true,
-    },
+    config: { wide_screen_mode: true, enable_forward: true },
     header: {
       template,
-      title: {
-        tag: "plain_text",
-        content: actionLabel,
-      },
+      title: { tag: "plain_text", content: actionLabel },
     },
     elements: [
       {
         tag: "div",
         text: {
           tag: "lark_md",
-          content: `**${input.employeeName} at ${input.siteName} — ${actionLabel}**\nEmployee ID: ${input.employeeId}`,
+          content: `**${input.employeeName} — ${actionLabel}**\nEmployee ID: ${input.employeeId}`,
         },
       },
       {
@@ -158,7 +154,7 @@ export async function sendGroupNotification(input: {
         tag: "div",
         text: {
           tag: "lark_md",
-          content: "**Check-in track**",
+          content: `**Detected location**\n${input.detectedAddress}`,
         },
       },
       {
@@ -166,14 +162,7 @@ export async function sendGroupNotification(input: {
         fields: [
           {
             is_short: true,
-            text: { tag: "lark_md", content: "**Location validation**\n✅ Approved" },
-          },
-          {
-            is_short: true,
-            text: {
-              tag: "lark_md",
-              content: `**Distance from site**\n${Math.round(input.distance)} meters`,
-            },
+            text: { tag: "lark_md", content: "**Location capture**\n✅ Live GPS" },
           },
           {
             is_short: true,
@@ -191,7 +180,7 @@ export async function sendGroupNotification(input: {
             tag: "button",
             type: "primary",
             text: { tag: "plain_text", content: "View Location" },
-            url: mapUrl,
+            url: input.mapLink,
           },
           ...(detailsBaseUrl
             ? [
@@ -210,7 +199,7 @@ export async function sendGroupNotification(input: {
         elements: [
           {
             tag: "plain_text",
-            content: "GPS-validated attendance record saved to Lark Base.",
+            content: "Live-location attendance record saved to Lark Base.",
           },
         ],
       },
