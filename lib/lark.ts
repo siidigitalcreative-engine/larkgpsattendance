@@ -91,6 +91,8 @@ export async function sendGroupNotification(input: {
   employeeId: string;
   attendanceType: string;
   siteName: string;
+  latitude: number;
+  longitude: number;
   distance: number;
   accuracy: number;
   submittedAt: number;
@@ -98,29 +100,142 @@ export async function sendGroupNotification(input: {
   const webhook = process.env.LARK_GROUP_WEBHOOK;
   if (!webhook) return;
 
-  const time = new Intl.DateTimeFormat("en-PH", {
+  const date = new Intl.DateTimeFormat("en-PH", {
     timeZone: "Asia/Manila",
-    dateStyle: "medium",
-    timeStyle: "short",
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
   }).format(new Date(input.submittedAt));
 
-  const text = [
-    `✅ ${input.attendanceType}`,
-    `Employee: ${input.employeeName} (${input.employeeId})`,
-    `Site: ${input.siteName}`,
-    `Time: ${time}`,
-    `Distance: ${Math.round(input.distance)} m`,
-    `GPS accuracy: ±${Math.round(input.accuracy)} m`,
-  ].join("\n");
+  const time = new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(input.submittedAt));
+
+  const isCheckIn = input.attendanceType === "Check In";
+  const actionLabel = isCheckIn ? "Sign in" : "Sign out";
+  const template = isCheckIn ? "blue" : "orange";
+  const mapUrl = `https://www.google.com/maps?q=${input.latitude},${input.longitude}`;
+  const detailsBaseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_PUBLIC_URL || "";
+
+  const card = {
+    config: {
+      wide_screen_mode: true,
+      enable_forward: true,
+    },
+    header: {
+      template,
+      title: {
+        tag: "plain_text",
+        content: actionLabel,
+      },
+    },
+    elements: [
+      {
+        tag: "div",
+        text: {
+          tag: "lark_md",
+          content: `**${input.employeeName} at ${input.siteName} — ${actionLabel}**\nEmployee ID: ${input.employeeId}`,
+        },
+      },
+      {
+        tag: "div",
+        fields: [
+          {
+            is_short: true,
+            text: { tag: "lark_md", content: `**${actionLabel} Date**\n${date}` },
+          },
+          {
+            is_short: true,
+            text: { tag: "lark_md", content: `**${actionLabel} Time**\n${time}` },
+          },
+        ],
+      },
+      { tag: "hr" },
+      {
+        tag: "div",
+        text: {
+          tag: "lark_md",
+          content: "**Check-in track**",
+        },
+      },
+      {
+        tag: "div",
+        fields: [
+          {
+            is_short: true,
+            text: { tag: "lark_md", content: "**Location validation**\n✅ Approved" },
+          },
+          {
+            is_short: true,
+            text: {
+              tag: "lark_md",
+              content: `**Distance from site**\n${Math.round(input.distance)} meters`,
+            },
+          },
+          {
+            is_short: true,
+            text: {
+              tag: "lark_md",
+              content: `**GPS accuracy**\n±${Math.round(input.accuracy)} meters`,
+            },
+          },
+        ],
+      },
+      {
+        tag: "action",
+        actions: [
+          {
+            tag: "button",
+            type: "primary",
+            text: { tag: "plain_text", content: "View Location" },
+            url: mapUrl,
+          },
+          ...(detailsBaseUrl
+            ? [
+                {
+                  tag: "button",
+                  type: "default",
+                  text: { tag: "plain_text", content: "Open Attendance" },
+                  url: detailsBaseUrl,
+                },
+              ]
+            : []),
+        ],
+      },
+      {
+        tag: "note",
+        elements: [
+          {
+            tag: "plain_text",
+            content: "GPS-validated attendance record saved to Lark Base.",
+          },
+        ],
+      },
+    ],
+  };
 
   const response = await fetch(webhook, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ msg_type: "text", content: { text } }),
+    body: JSON.stringify({ msg_type: "interactive", card }),
     cache: "no-store",
   });
 
+  const responseText = await response.text();
   if (!response.ok) {
-    throw new Error(`Lark group webhook error: ${response.statusText}`);
+    throw new Error(`Lark group webhook error: ${response.status} ${responseText}`);
+  }
+
+  try {
+    const data = JSON.parse(responseText) as { code?: number; msg?: string };
+    if (typeof data.code === "number" && data.code !== 0) {
+      throw new Error(`Lark group webhook error: ${data.msg || data.code}`);
+    }
+  } catch (error) {
+    if (error instanceof SyntaxError) return;
+    throw error;
   }
 }
