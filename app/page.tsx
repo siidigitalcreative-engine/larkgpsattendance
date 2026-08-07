@@ -186,6 +186,10 @@ export default function Home() {
     }
   }
 
+  const isLoginError =
+    !employee &&
+    /do not match|invalid employee|verification failed|select your name first/i.test(status);
+
   return (
     <main className="shell">
       <section className="card">
@@ -491,7 +495,20 @@ export default function Home() {
           </>
         )}
 
-        <div className="status" aria-live="polite">
+        <div
+          className="status"
+          aria-live="polite"
+          role={isLoginError ? "alert" : "status"}
+          style={
+            isLoginError
+              ? {
+                  color: "#b42318",
+                  background: "#fef3f2",
+                  border: "1px solid #fecdca",
+                }
+              : undefined
+          }
+        >
           {status}
         </div>
         <p className="privacy">
