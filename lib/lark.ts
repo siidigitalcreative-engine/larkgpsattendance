@@ -4,11 +4,14 @@ type TenantTokenResponse = {
   tenant_access_token?: string;
 };
 
+type AttendanceGroup = "Office" | "Warehouse" | "Promodiser";
+
 type EmployeeRecord = {
   employeeId: string;
   employeeName: string;
   department?: string;
   mobileNumber: string;
+  attendanceGroup: AttendanceGroup;
   active: boolean;
 };
 
@@ -78,13 +81,22 @@ export async function listActiveEmployees(): Promise<EmployeeRecord[]> {
       const employeeName = String(fields["Full Name"] ?? "").trim();
       const department = String(fields["Department"] ?? "").trim();
       const mobileNumber = String(fields["Mobile Number"] ?? "").trim();
+      const attendanceGroup = String(fields["Attendance Group"] ?? "").trim();
       const active = parseActive(fields.Active);
-      if (employeeId && employeeName && mobileNumber && active) {
+
+      if (
+        employeeId &&
+        employeeName &&
+        mobileNumber &&
+        ["Office", "Warehouse", "Promodiser"].includes(attendanceGroup) &&
+        active
+      ) {
         employees.push({
           employeeId,
           employeeName,
           department: department || undefined,
           mobileNumber,
+          attendanceGroup: attendanceGroup as AttendanceGroup,
           active,
         });
       }
@@ -130,6 +142,7 @@ type AttendanceRecord = {
   detectedAddress: string;
   mapLink: string;
   submittedAt: number;
+  attendanceGroup: AttendanceGroup;
 };
 
 export async function createAttendanceRecord(record: AttendanceRecord): Promise<string> {
@@ -152,6 +165,7 @@ export async function createAttendanceRecord(record: AttendanceRecord): Promise<
           "Attendance ID": attendanceId,
           "Employee ID": record.employeeId,
           "Employee Name": record.employeeName,
+          "Attendance Group": record.attendanceGroup,
           "Attendance Type": record.attendanceType,
           "Submitted At": record.submittedAt,
           Latitude: record.latitude,
@@ -174,9 +188,22 @@ export async function createAttendanceRecord(record: AttendanceRecord): Promise<
   return data.data?.record?.record_id ?? "";
 }
 
+function getGroupWebhook(attendanceGroup: AttendanceGroup): string {
+  const webhookByGroup: Record<AttendanceGroup, string | undefined> = {
+    Office: process.env.LARK_GROUP_WEBHOOK_OFFICE,
+    Warehouse: process.env.LARK_GROUP_WEBHOOK_WAREHOUSE,
+    Promodiser: process.env.LARK_GROUP_WEBHOOK_PROMODISER,
+  };
+
+  const webhook = webhookByGroup[attendanceGroup] || process.env.LARK_GROUP_WEBHOOK;
+  if (!webhook) {
+    throw new Error(`Missing webhook for attendance group: ${attendanceGroup}`);
+  }
+  return webhook;
+}
+
 export async function sendGroupNotification(input: AttendanceRecord): Promise<void> {
-  const webhook = process.env.LARK_GROUP_WEBHOOK;
-  if (!webhook) return;
+  const webhook = getGroupWebhook(input.attendanceGroup);
 
   const date = new Intl.DateTimeFormat("en-PH", {
     timeZone: "Asia/Manila",
@@ -206,7 +233,7 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
         tag: "div",
         text: {
           tag: "lark_md",
-          content: `**${input.employeeName} — ${actionLabel}**\nEmployee ID: ${input.employeeId}`,
+          content: `**${input.employeeName} — ${actionLabel}**\nEmployee ID: ${input.employeeId}\nAttendance Group: ${input.attendanceGroup}`,
         },
       },
       {
