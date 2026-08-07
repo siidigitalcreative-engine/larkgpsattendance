@@ -69,6 +69,7 @@ export async function POST(request: Request) {
     const record = {
       employeeId: session.employeeId,
       employeeName: session.employeeName,
+      attendanceGroup: session.attendanceGroup,
       attendanceType: input.attendanceType,
       latitude: input.latitude,
       longitude: input.longitude,
