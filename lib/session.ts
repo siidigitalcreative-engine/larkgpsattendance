@@ -7,6 +7,7 @@ type SessionPayload = {
   employeeId: string;
   employeeName: string;
   department?: string;
+  attendanceGroup: "Office" | "Warehouse" | "Promodiser";
   exp: number;
 };
 
@@ -34,6 +35,7 @@ export function createSessionToken(input: {
   employeeId: string;
   employeeName: string;
   department?: string;
+  attendanceGroup: "Office" | "Warehouse" | "Promodiser";
 }): string {
   const payload: SessionPayload = {
     ...input,
@@ -56,7 +58,12 @@ export function verifySessionToken(token?: string | null): SessionPayload | null
 
   try {
     const payload = JSON.parse(decode(encodedPayload)) as SessionPayload;
-    if (!payload.employeeId || !payload.employeeName || payload.exp <= Math.floor(Date.now() / 1000)) {
+    if (
+      !payload.employeeId ||
+      !payload.employeeName ||
+      !["Office", "Warehouse", "Promodiser"].includes(payload.attendanceGroup) ||
+      payload.exp <= Math.floor(Date.now() / 1000)
+    ) {
       return null;
     }
     return payload;
