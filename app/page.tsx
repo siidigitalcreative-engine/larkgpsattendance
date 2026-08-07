@@ -24,7 +24,7 @@ export default function Home() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [selectedName, setSelectedName] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
+  const [mobileNumber, setMobileNumber] = useState("");
   const [search, setSearch] = useState("");
   const [attendanceType, setAttendanceType] = useState<"Check In" | "Check Out">("Check In");
   const [position, setPosition] = useState<Position | null>(null);
@@ -47,7 +47,7 @@ export default function Home() {
         const employeeData = await employeeResponse.json();
         if (!employeeResponse.ok) throw new Error(employeeData.error || "Unable to load employee list.");
         setEmployees(employeeData.employees || []);
-        setStatus("Select your name and enter your Employee ID once on this device.");
+        setStatus("Select your name and enter your registered mobile number once on this device.");
       } catch (error) {
         setStatus(error instanceof Error ? error.message : "Unable to initialize attendance.");
       } finally {
@@ -78,7 +78,7 @@ export default function Home() {
       const response = await fetch("/api/auth/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeName: selectedName, employeeId }),
+        body: JSON.stringify({ employeeName: selectedName, mobileNumber: `+63${mobileNumber}` }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Verification failed.");
@@ -96,9 +96,9 @@ export default function Home() {
     await fetch("/api/auth/logout", { method: "POST" });
     setEmployee(null);
     setSelectedName("");
-    setEmployeeId("");
+    setMobileNumber("");
     setPosition(null);
-    setStatus("Select your name and enter your Employee ID.");
+    setStatus("Select your name and enter your registered mobile number.");
     setBusy(false);
   }
 
@@ -166,7 +166,7 @@ export default function Home() {
         ) : !employee ? (
           <>
             <p className="intro">
-              Verify your identity once on this device. Select your name, then enter your Employee ID.
+              Verify your identity once on this device. Select your name, then enter your registered mobile number.
             </p>
 
             <form onSubmit={verifyIdentity}>
@@ -208,14 +208,27 @@ export default function Home() {
               </div>
 
               <label>
-                Employee ID
-                <input
-                  type="password"
-                  value={employeeId}
-                  onChange={(event) => setEmployeeId(event.target.value)}
-                  required
-                  autoComplete="current-password"
-                />
+                Registered mobile number
+                <div className="phone-input">
+                  <span className="phone-prefix">+63</span>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    value={mobileNumber}
+                    onChange={(event) => {
+                      const digits = event.target.value.replace(/\D/g, "").slice(0, 10);
+                      setMobileNumber(digits);
+                    }}
+                    placeholder="917 123 4567"
+                    minLength={10}
+                    maxLength={10}
+                    pattern="9[0-9]{9}"
+                    title="Enter the 10-digit Philippine mobile number after +63, beginning with 9."
+                    required
+                    autoComplete="tel-national"
+                  />
+                </div>
+                <span className="field-hint">Enter the remaining 10 digits, beginning with 9.</span>
               </label>
 
               <button className="primary" type="submit" disabled={busy}>
