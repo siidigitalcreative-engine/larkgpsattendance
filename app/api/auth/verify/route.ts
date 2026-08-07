@@ -50,6 +50,7 @@ export async function POST(request: Request) {
         employeeId: employee.employeeId,
         employeeName: employee.employeeName,
         department: employee.department ?? "",
+        attendanceGroup: employee.attendanceGroup,
       },
     });
 
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
         employeeId: employee.employeeId,
         employeeName: employee.employeeName,
         department: employee.department,
+        attendanceGroup: employee.attendanceGroup,
       }),
       sessionCookieOptions,
     );
