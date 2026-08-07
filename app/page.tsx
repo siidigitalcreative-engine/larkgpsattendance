@@ -126,6 +126,29 @@ export default function Home() {
     );
   }
 
+  const mapPreviewUrl = useMemo(() => {
+    if (!position) return "";
+
+    const latitudeSpan = 0.003;
+    const longitudeSpan = 0.005;
+    const left = position.longitude - longitudeSpan;
+    const right = position.longitude + longitudeSpan;
+    const bottom = position.latitude - latitudeSpan;
+    const top = position.latitude + latitudeSpan;
+
+    const bbox = [left, bottom, right, top].map(encodeURIComponent).join("%2C");
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${encodeURIComponent(
+      position.latitude,
+    )}%2C${encodeURIComponent(position.longitude)}`;
+  }, [position]);
+
+  const fullMapUrl = useMemo(() => {
+    if (!position) return "";
+    return `https://www.openstreetmap.org/?mlat=${encodeURIComponent(
+      position.latitude,
+    )}&mlon=${encodeURIComponent(position.longitude)}#map=18/${position.latitude}/${position.longitude}`;
+  }, [position]);
+
   async function submitAttendance(event: FormEvent) {
     event.preventDefault();
     if (!position) {
@@ -147,7 +170,6 @@ export default function Home() {
         throw new Error(data.error || "Attendance submission failed.");
       }
       setStatus(`Success: ${attendanceType} recorded at ${data.detectedAddress}.`);
-      setPosition(null);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Attendance submission failed.");
     } finally {
@@ -260,6 +282,28 @@ export default function Home() {
               <button className="secondary" type="button" onClick={captureLocation} disabled={busy}>
                 {position ? "Refresh Live Location" : "Capture Live Location"}
               </button>
+
+              {position && mapPreviewUrl ? (
+                <section className="map-preview" aria-label="Captured location map preview">
+                  <div className="map-preview-header">
+                    <div>
+                      <strong>Captured location</strong>
+                      <span>GPS accuracy ±{Math.round(position.accuracy)} meters</span>
+                    </div>
+                    <a href={fullMapUrl} target="_blank" rel="noreferrer">
+                      View full map
+                    </a>
+                  </div>
+                  <div className="map-frame">
+                    <iframe
+                      title="Captured GPS location"
+                      src={mapPreviewUrl}
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                </section>
+              ) : null}
 
               <button className="primary" type="submit" disabled={busy || !position}>
                 {busy ? "Submitting…" : `Submit ${attendanceType}`}
