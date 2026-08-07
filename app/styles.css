@@ -66,3 +66,74 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-size: 12px;
   font-weight: 400;
 }
+/* Add these rules to the bottom of app/styles.css */
+
+.map-preview {
+  margin: 14px 0;
+  overflow: hidden;
+  border: 1px solid #d8dee8;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.map-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+}
+
+.map-preview-header > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.map-preview-header strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.map-preview-header span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.map-preview-header a {
+  flex: 0 0 auto;
+  color: #3370ff;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.map-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-top: 1px solid #e5e7eb;
+  background: #eef2f6;
+}
+
+.map-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+@media (max-width: 480px) {
+  .map-preview-header {
+    align-items: flex-start;
+  }
+
+  .map-preview-header a {
+    font-size: 12px;
+  }
+
+  .map-frame {
+    aspect-ratio: 4 / 3;
+  }
+}
