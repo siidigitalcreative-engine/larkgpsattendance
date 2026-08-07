@@ -190,6 +190,9 @@ export default function Home() {
     !employee &&
     /do not match|invalid employee|verification failed|select your name first/i.test(status);
 
+  const isIdentityVerified =
+    /identity verified/i.test(status);
+
   return (
     <main className="shell">
       <section className="card">
@@ -506,7 +509,13 @@ export default function Home() {
                   background: "#fef3f2",
                   border: "1px solid #fecdca",
                 }
-              : undefined
+              : isIdentityVerified
+                ? {
+                    color: "#067647",
+                    background: "#ecfdf3",
+                    border: "1px solid #abefc6",
+                  }
+                : undefined
           }
         >
           {status}
