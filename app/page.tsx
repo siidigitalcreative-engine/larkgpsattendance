@@ -284,22 +284,86 @@ export default function Home() {
               </button>
 
               {position && mapPreviewUrl ? (
-                <section className="map-preview" aria-label="Captured location map preview">
-                  <div className="map-preview-header">
-                    <div>
-                      <strong>Captured location</strong>
-                      <span>GPS accuracy ±{Math.round(position.accuracy)} meters</span>
+                <section
+                  aria-label="Captured location map preview"
+                  style={{
+                    margin: "14px 0",
+                    overflow: "hidden",
+                    border: "1px solid #d8dee8",
+                    borderRadius: 14,
+                    background: "#ffffff",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      gap: 16,
+                      padding: "12px 14px",
+                    }}
+                  >
+                    <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
+                      <strong
+                        style={{
+                          display: "block",
+                          color: "#172033",
+                          fontSize: 14,
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        Captured location
+                      </strong>
+                      <span
+                        style={{
+                          display: "block",
+                          color: "#667085",
+                          fontSize: 12,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        GPS accuracy: ±{Math.round(position.accuracy)} meters
+                      </span>
                     </div>
-                    <a href={fullMapUrl} target="_blank" rel="noreferrer">
+
+                    <a
+                      href={fullMapUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        flexShrink: 0,
+                        color: "#3370ff",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        lineHeight: 1.4,
+                        textDecoration: "none",
+                      }}
+                    >
                       View full map
                     </a>
                   </div>
-                  <div className="map-frame">
+
+                  <div
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      aspectRatio: "16 / 9",
+                      borderTop: "1px solid #e5e7eb",
+                      background: "#eef2f6",
+                    }}
+                  >
                     <iframe
                       title="Captured GPS location"
                       src={mapPreviewUrl}
                       loading="lazy"
                       referrerPolicy="no-referrer"
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                        border: 0,
+                      }}
                     />
                   </div>
                 </section>
