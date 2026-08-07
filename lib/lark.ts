@@ -8,6 +8,7 @@ type EmployeeRecord = {
   employeeId: string;
   employeeName: string;
   department?: string;
+  mobileNumber: string;
   active: boolean;
 };
 
@@ -76,9 +77,16 @@ export async function listActiveEmployees(): Promise<EmployeeRecord[]> {
       const employeeId = String(fields["Employee ID"] ?? "").trim();
       const employeeName = String(fields["Full Name"] ?? "").trim();
       const department = String(fields["Department"] ?? "").trim();
+      const mobileNumber = String(fields["Mobile Number"] ?? "").trim();
       const active = parseActive(fields.Active);
-      if (employeeId && employeeName && active) {
-        employees.push({ employeeId, employeeName, department: department || undefined, active });
+      if (employeeId && employeeName && mobileNumber && active) {
+        employees.push({
+          employeeId,
+          employeeName,
+          department: department || undefined,
+          mobileNumber,
+          active,
+        });
       }
     }
 
@@ -88,17 +96,26 @@ export async function listActiveEmployees(): Promise<EmployeeRecord[]> {
   return employees.sort((a, b) => a.employeeName.localeCompare(b.employeeName));
 }
 
+function normalizeMobileNumber(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.startsWith("63") && digits.length >= 12) return digits.slice(2);
+  if (digits.startsWith("0") && digits.length >= 11) return digits.slice(1);
+  return digits;
+}
+
 export async function verifyEmployee(input: {
-  employeeId: string;
+  mobileNumber: string;
   employeeName: string;
 }): Promise<EmployeeRecord | null> {
-  const normalize = (value: string) => value.trim().toLowerCase();
+  const normalizeName = (value: string) => value.trim().toLowerCase();
+  const submittedMobile = normalizeMobileNumber(input.mobileNumber);
   const employees = await listActiveEmployees();
+
   return (
     employees.find(
       (employee) =>
-        normalize(employee.employeeId) === normalize(input.employeeId) &&
-        normalize(employee.employeeName) === normalize(input.employeeName),
+        normalizeName(employee.employeeName) === normalizeName(input.employeeName) &&
+        normalizeMobileNumber(employee.mobileNumber) === submittedMobile,
     ) ?? null
   );
 }
