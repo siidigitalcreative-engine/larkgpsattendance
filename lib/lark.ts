@@ -188,6 +188,15 @@ export async function createAttendanceRecord(record: AttendanceRecord): Promise<
   return data.data?.record?.record_id ?? "";
 }
 
+function toMultiUrl(url: string) {
+  return {
+    url,
+    android_url: url,
+    ios_url: url,
+    pc_url: url,
+  };
+}
+
 function getGroupWebhook(attendanceGroup: AttendanceGroup): string {
   const webhookByGroup: Record<AttendanceGroup, string | undefined> = {
     Office: process.env.LARK_GROUP_WEBHOOK_OFFICE,
@@ -265,7 +274,7 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
             tag: "button",
             type: "primary",
             text: { tag: "plain_text", content: "View Location" },
-            url: input.mapLink,
+            multi_url: toMultiUrl(input.mapLink),
           },
           ...(detailsBaseUrl
             ? [
@@ -273,7 +282,7 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
                   tag: "button",
                   type: "default",
                   text: { tag: "plain_text", content: "Open Attendance" },
-                  url: detailsBaseUrl,
+                  multi_url: toMultiUrl(detailsBaseUrl),
                 },
               ]
             : []),
