@@ -10,7 +10,7 @@ const schema = z.object({
   attendanceType: z.enum(["Check In", "Check Out"]),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
-  accuracy: z.number().positive().max(10_000),
+  accuracy: z.number().positive(),
   capturedAt: z.number().positive(),
 });
 
