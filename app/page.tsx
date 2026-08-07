@@ -197,10 +197,10 @@ export default function Home() {
                         }}
                         aria-selected={isSelected}
                       >
-                        <span className="employee-option-name">{item.employeeName}</span>
-                        {item.department ? (
-                          <span className="employee-option-department">{item.department}</span>
-                        ) : null}
+                        <span className="employee-option-name">
+                          {item.employeeName}
+                          {item.department ? ` · ${item.department}` : ""}
+                        </span>
                       </button>
                     );
                   })
