@@ -211,32 +211,136 @@ export default function Home() {
                 />
               </label>
 
-              <div className="employee-results" role="listbox" aria-label="Employee search results">
-                {search.trim() && filteredEmployees.length === 0 ? (
-                  <div className="employee-empty">No matching employee found.</div>
-                ) : (
-                  filteredEmployees.map((item) => {
-                    const isSelected = selectedName === item.employeeName;
-                    return (
-                      <button
-                        type="button"
-                        key={`${item.employeeName}-${item.department || ""}`}
-                        className={`employee-option${isSelected ? " selected" : ""}`}
-                        onClick={() => {
-                          setSelectedName(item.employeeName);
-                          setSearch(item.employeeName);
-                        }}
-                        aria-selected={isSelected}
-                      >
-                        <span className="employee-option-name">
-                          {item.employeeName}
-                          {item.department ? ` · ${item.department}` : ""}
-                        </span>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
+              {search.trim() ? (
+                <div
+                  role="listbox"
+                  aria-label="Employee search results"
+                  style={{
+                    display: "grid",
+                    gap: 8,
+                    marginTop: 10,
+                    marginBottom: 18,
+                  }}
+                >
+                  {filteredEmployees.length === 0 ? (
+                    <div
+                      style={{
+                        padding: "12px 14px",
+                        border: "1px dashed #d8dee8",
+                        borderRadius: 12,
+                        background: "#f8fafc",
+                        color: "#667085",
+                        fontSize: 13,
+                      }}
+                    >
+                      No matching employee found.
+                    </div>
+                  ) : (
+                    filteredEmployees.map((item) => {
+                      const isSelected = selectedName === item.employeeName;
+                      const initials = item.employeeName
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((part) => part[0]?.toUpperCase())
+                        .join("");
+
+                      return (
+                        <button
+                          type="button"
+                          key={`${item.employeeName}-${item.department || ""}`}
+                          onClick={() => {
+                            setSelectedName(item.employeeName);
+                            setSearch(item.employeeName);
+                          }}
+                          aria-selected={isSelected}
+                          style={{
+                            width: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            padding: "12px 14px",
+                            border: isSelected
+                              ? "1px solid #3370ff"
+                              : "1px solid #d8dee8",
+                            borderRadius: 12,
+                            background: isSelected ? "#f2f6ff" : "#ffffff",
+                            boxShadow: isSelected
+                              ? "0 0 0 3px rgba(51, 112, 255, 0.10)"
+                              : "none",
+                            color: "#172033",
+                            textAlign: "left",
+                            cursor: "pointer",
+                            appearance: "none",
+                            WebkitAppearance: "none",
+                          }}
+                        >
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              width: 38,
+                              height: 38,
+                              flex: "0 0 38px",
+                              display: "grid",
+                              placeItems: "center",
+                              borderRadius: "50%",
+                              background: isSelected ? "#3370ff" : "#eef3ff",
+                              color: isSelected ? "#ffffff" : "#3370ff",
+                              fontSize: 13,
+                              fontWeight: 800,
+                            }}
+                          >
+                            {initials || "•"}
+                          </span>
+
+                          <span
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              display: "grid",
+                              gap: 3,
+                            }}
+                          >
+                            <strong
+                              style={{
+                                display: "block",
+                                fontSize: 14,
+                                lineHeight: 1.3,
+                              }}
+                            >
+                              {item.employeeName}
+                            </strong>
+                            {item.department ? (
+                              <span
+                                style={{
+                                  display: "block",
+                                  color: "#667085",
+                                  fontSize: 12,
+                                  lineHeight: 1.3,
+                                }}
+                              >
+                                {item.department}
+                              </span>
+                            ) : null}
+                          </span>
+
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              flex: "0 0 auto",
+                              color: isSelected ? "#3370ff" : "#98a2b3",
+                              fontSize: 18,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {isSelected ? "✓" : "›"}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              ) : null}
 
               <label>
                 Registered mobile number
