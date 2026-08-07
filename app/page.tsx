@@ -20,6 +20,15 @@ type EmployeeOption = {
   department?: string;
 };
 
+function formatPhilippineMobileNumber(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 10);
+  const first = digits.slice(0, 3);
+  const second = digits.slice(3, 6);
+  const third = digits.slice(6, 10);
+
+  return [first, second, third].filter(Boolean).join(" ");
+}
+
 export default function Home() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
@@ -236,15 +245,13 @@ export default function Home() {
                   <input
                     type="tel"
                     inputMode="numeric"
-                    value={mobileNumber}
+                    value={formatPhilippineMobileNumber(mobileNumber)}
                     onChange={(event) => {
                       const digits = event.target.value.replace(/\D/g, "").slice(0, 10);
                       setMobileNumber(digits);
                     }}
                     placeholder="917 123 4567"
-                    minLength={10}
-                    maxLength={10}
-                    pattern="9[0-9]{9}"
+                    maxLength={12}
                     title="Enter the 10-digit Philippine mobile number after +63, beginning with 9."
                     required
                     autoComplete="tel-national"
