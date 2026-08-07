@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { verifyEmployee } from "@/lib/lark";
 import {
   createSessionToken,
@@ -9,19 +8,38 @@ import {
 
 export const runtime = "nodejs";
 
-const schema = z.object({
-  employeeName: z.string().trim().min(2).max(100),
-  employeeId: z.string().trim().min(1).max(50),
-});
+type VerifyRequest = {
+  employeeName?: unknown;
+  mobileNumber?: unknown;
+};
 
 export async function POST(request: Request) {
   try {
-    const input = schema.parse(await request.json());
-    const employee = await verifyEmployee(input);
+    const body = (await request.json()) as VerifyRequest;
+
+    const employeeName =
+      typeof body.employeeName === "string" ? body.employeeName.trim() : "";
+    const mobileNumber =
+      typeof body.mobileNumber === "string" ? body.mobileNumber.trim() : "";
+
+    if (employeeName.length < 2 || mobileNumber.replace(/\D/g, "").length < 10) {
+      return NextResponse.json(
+        { error: "Select your name and enter a valid registered mobile number." },
+        { status: 400 },
+      );
+    }
+
+    const employee = await verifyEmployee({
+      employeeName,
+      mobileNumber,
+    });
 
     if (!employee) {
       return NextResponse.json(
-        { error: "The selected name and Employee ID do not match an active employee record." },
+        {
+          error:
+            "The selected name and registered mobile number do not match an active employee record.",
+        },
         { status: 401 },
       );
     }
@@ -44,14 +62,15 @@ export async function POST(request: Request) {
       }),
       sessionCookieOptions,
     );
+
     return response;
   } catch (error) {
-    console.error(error);
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid employee details." }, { status: 400 });
-    }
+    console.error("Employee verification failed:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Verification failed." },
+      {
+        error:
+          error instanceof Error ? error.message : "Employee verification failed.",
+      },
       { status: 500 },
     );
   }
