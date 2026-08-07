@@ -11,7 +11,7 @@ const schema = z.object({
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   accuracy: z.number().positive().max(10_000),
-  capturedAt: z.number().int().positive(),
+  capturedAt: z.number().positive(),
 });
 
 async function reverseGeocode(latitude: number, longitude: number): Promise<string> {
@@ -85,7 +85,13 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error(error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid submission data." }, { status: 400 });
+      const details = error.issues
+        .map((issue) => `${issue.path.join(".") || "request"}: ${issue.message}`)
+        .join("; ");
+      return NextResponse.json(
+        { error: `Invalid submission data. ${details}` },
+        { status: 400 },
+      );
     }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unexpected server error." },
