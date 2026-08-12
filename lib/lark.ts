@@ -235,7 +235,7 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
     config: { wide_screen_mode: true, enable_forward: true },
     header: {
       template: isCheckIn ? "blue" : "orange",
-      title: { tag: "plain_text", content: actionLabel },
+      title: { tag: "plain_text", content: `${input.employeeName} — ${actionLabel}` },
     },
     elements: [
       {
