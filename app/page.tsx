@@ -40,6 +40,70 @@ function detectDeviceType(): DeviceType {
   return mobileUa || touchTablet ? "Mobile" : "Desktop";
 }
 
+
+async function createAttendanceThumbnail(file: File): Promise<Blob> {
+  const imageUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Unable to prepare attendance image."));
+      img.src = imageUrl;
+    });
+
+    const targetWidth = 480;
+    const targetHeight = 270;
+    const targetRatio = targetWidth / targetHeight;
+    const sourceRatio = image.naturalWidth / image.naturalHeight;
+
+    let sourceWidth = image.naturalWidth;
+    let sourceHeight = image.naturalHeight;
+    let sourceX = 0;
+    let sourceY = 0;
+
+    if (sourceRatio > targetRatio) {
+      sourceWidth = image.naturalHeight * targetRatio;
+      sourceX = (image.naturalWidth - sourceWidth) / 2;
+    } else {
+      sourceHeight = image.naturalWidth / targetRatio;
+      sourceY = (image.naturalHeight - sourceHeight) / 2;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Unable to prepare attendance image.");
+
+    context.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      targetWidth,
+      targetHeight,
+    );
+
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("Unable to prepare attendance image."));
+        },
+        "image/jpeg",
+        0.82,
+      );
+    });
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
+}
+
 export default function Home() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
@@ -254,7 +318,15 @@ export default function Home() {
       formData.set("deviceType", deviceType);
       formData.set("note", note.trim());
 
-      if (attendanceImage) formData.set("image", attendanceImage);
+      if (attendanceImage) {
+        formData.set("image", attendanceImage);
+        const thumbnail = await createAttendanceThumbnail(attendanceImage);
+        formData.set(
+          "thumbnail",
+          thumbnail,
+          `attendance-thumbnail-${Date.now()}.jpg`,
+        );
+      }
 
       const response = await fetch("/api/attendance", {
         method: "POST",
