@@ -150,37 +150,66 @@ type AttendanceRecord = {
   attendanceGroup: AttendanceGroup;
   note?: string;
   attendanceImageToken?: string;
+  attendanceImageKey?: string;
   deviceType: DeviceType;
   locationMethod: LocationMethod;
 };
 
-export async function uploadAttendanceImage(file: File): Promise<string> {
+export async function uploadAttendanceImage(
+  file: File,
+): Promise<{ fileToken: string; imageKey: string }> {
   const token = await getTenantAccessToken();
   const { appToken } = getBaseConfig();
 
-  const upload = new FormData();
-  upload.set("file_name", file.name || `attendance-${Date.now()}.jpg`);
-  upload.set("parent_type", "bitable_image");
-  upload.set("parent_node", appToken);
-  upload.set("size", String(file.size));
-  upload.set("file", file, file.name || `attendance-${Date.now()}.jpg`);
+  const baseFormData = new FormData();
+  baseFormData.set("file_name", file.name || `attendance-${Date.now()}.jpg`);
+  baseFormData.set("parent_type", "bitable_image");
+  baseFormData.set("parent_node", appToken);
+  baseFormData.set("size", String(file.size));
+  baseFormData.set("file", file, file.name || `attendance-${Date.now()}.jpg`);
 
-  const response = await fetch(
+  const baseResponse = await fetch(
     "https://open.larksuite.com/open-apis/drive/v1/medias/upload_all",
     {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
-      body: upload,
+      body: baseFormData,
       cache: "no-store",
     },
   );
 
-  const data = await response.json();
-  if (!response.ok || data.code !== 0 || !data.data?.file_token) {
-    throw new Error(`Lark image upload error: ${data.msg || response.statusText}`);
+  const baseData = await baseResponse.json();
+
+  if (!baseResponse.ok || baseData.code !== 0 || !baseData.data?.file_token) {
+    throw new Error(`Lark image upload error: ${baseData.msg || baseResponse.statusText}`);
   }
 
-  return String(data.data.file_token);
+  const messageFormData = new FormData();
+  messageFormData.set("image_type", "message");
+  messageFormData.set("image", file, file.name || `attendance-${Date.now()}.jpg`);
+
+  const messageResponse = await fetch(
+    "https://open.larksuite.com/open-apis/im/v1/images",
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: messageFormData,
+      cache: "no-store",
+    },
+  );
+
+  const messageData = await messageResponse.json();
+
+  if (!messageResponse.ok || messageData.code !== 0 || !messageData.data?.image_key) {
+    throw new Error(
+      `Lark card image upload error: ${messageData.msg || messageResponse.statusText}`,
+    );
+  }
+
+  return {
+    fileToken: String(baseData.data.file_token),
+    imageKey: String(messageData.data.image_key),
+  };
 }
 
 export async function createAttendanceRecord(record: AttendanceRecord): Promise<string> {
@@ -286,15 +315,23 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
     });
   }
 
-  if (input.attendanceImageToken) {
+  if (input.attendanceImageKey) {
     optionalElements.push({
-      tag: "note",
-      elements: [
-        {
-          tag: "plain_text",
-          content: "📎 Attendance image attached to the Lark Base record.",
-        },
-      ],
+      tag: "div",
+      text: {
+        tag: "lark_md",
+        content: "**Attendance Image**",
+      },
+    });
+    optionalElements.push({
+      tag: "img",
+      img_key: input.attendanceImageKey,
+      alt: {
+        tag: "plain_text",
+        content: `${input.employeeName} attendance image`,
+      },
+      mode: "fit_horizontal",
+      preview: true,
     });
   }
 
