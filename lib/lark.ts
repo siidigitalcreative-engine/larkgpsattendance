@@ -324,14 +324,44 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
       },
     });
     optionalElements.push({
-      tag: "img",
-      img_key: input.attendanceImageKey,
-      alt: {
-        tag: "plain_text",
-        content: `${input.employeeName} attendance image`,
-      },
-      mode: "fit_horizontal",
-      preview: true,
+      tag: "column_set",
+      flex_mode: "none",
+      background_style: "default",
+      columns: [
+        {
+          tag: "column",
+          width: "weighted",
+          weight: 1,
+          vertical_align: "top",
+          elements: [
+            {
+              tag: "img",
+              img_key: input.attendanceImageKey,
+              alt: {
+                tag: "plain_text",
+                content: `${input.employeeName} attendance image`,
+              },
+              mode: "crop_center",
+              preview: true,
+            },
+          ],
+        },
+        {
+          tag: "column",
+          width: "weighted",
+          weight: 2,
+          vertical_align: "top",
+          elements: [
+            {
+              tag: "div",
+              text: {
+                tag: "lark_md",
+                content: "Tap the thumbnail to preview the full attendance image.",
+              },
+            },
+          ],
+        },
+      ],
     });
   }
 
