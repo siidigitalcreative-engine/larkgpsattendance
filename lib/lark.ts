@@ -5,6 +5,8 @@ type TenantTokenResponse = {
 };
 
 type AttendanceGroup = "Office" | "Warehouse" | "Promodiser";
+type DeviceType = "Mobile" | "Desktop";
+type LocationMethod = "Live GPS" | "Approximate Desktop Location";
 
 type EmployeeRecord = {
   employeeId: string;
@@ -45,7 +47,9 @@ function getBaseConfig() {
 
 function parseActive(value: unknown): boolean {
   if (typeof value === "boolean") return value;
-  if (typeof value === "string") return ["true", "yes", "active", "1"].includes(value.toLowerCase());
+  if (typeof value === "string") {
+    return ["true", "yes", "active", "1"].includes(value.toLowerCase());
+  }
   if (typeof value === "number") return value === 1;
   return false;
 }
@@ -53,9 +57,9 @@ function parseActive(value: unknown): boolean {
 export async function listActiveEmployees(): Promise<EmployeeRecord[]> {
   const tableId = process.env.LARK_EMPLOYEES_TABLE_ID;
   if (!tableId) throw new Error("Missing LARK_EMPLOYEES_TABLE_ID");
+
   const { appToken } = getBaseConfig();
   const token = await getTenantAccessToken();
-
   const employees: EmployeeRecord[] = [];
   let pageToken = "";
 
@@ -70,6 +74,7 @@ export async function listActiveEmployees(): Promise<EmployeeRecord[]> {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
+
     const data = await response.json();
     if (!response.ok || data.code !== 0) {
       throw new Error(`Lark Employees error: ${data.msg || response.statusText}`);
@@ -143,14 +148,73 @@ type AttendanceRecord = {
   mapLink: string;
   submittedAt: number;
   attendanceGroup: AttendanceGroup;
+  note?: string;
+  attendanceImageToken?: string;
+  deviceType: DeviceType;
+  locationMethod: LocationMethod;
 };
+
+export async function uploadAttendanceImage(file: File): Promise<string> {
+  const token = await getTenantAccessToken();
+  const { appToken } = getBaseConfig();
+
+  const upload = new FormData();
+  upload.set("file_name", file.name || `attendance-${Date.now()}.jpg`);
+  upload.set("parent_type", "bitable_image");
+  upload.set("parent_node", appToken);
+  upload.set("size", String(file.size));
+  upload.set("file", file, file.name || `attendance-${Date.now()}.jpg`);
+
+  const response = await fetch(
+    "https://open.larksuite.com/open-apis/drive/v1/medias/upload_all",
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: upload,
+      cache: "no-store",
+    },
+  );
+
+  const data = await response.json();
+  if (!response.ok || data.code !== 0 || !data.data?.file_token) {
+    throw new Error(`Lark image upload error: ${data.msg || response.statusText}`);
+  }
+
+  return String(data.data.file_token);
+}
 
 export async function createAttendanceRecord(record: AttendanceRecord): Promise<string> {
   const tableId = process.env.LARK_ATTENDANCE_TABLE_ID;
   if (!tableId) throw new Error("Missing LARK_ATTENDANCE_TABLE_ID");
+
   const { appToken } = getBaseConfig();
   const token = await getTenantAccessToken();
-  const attendanceId = `${record.employeeId}-${record.attendanceType === "Check In" ? "IN" : "OUT"}-${record.submittedAt}`;
+  const attendanceId = `${record.employeeId}-${
+    record.attendanceType === "Check In" ? "IN" : "OUT"
+  }-${record.submittedAt}`;
+
+  const fields: Record<string, unknown> = {
+    "Attendance ID": attendanceId,
+    "Employee ID": record.employeeId,
+    "Employee Name": record.employeeName,
+    "Attendance Group": record.attendanceGroup,
+    "Attendance Type": record.attendanceType,
+    "Submitted At": record.submittedAt,
+    Latitude: record.latitude,
+    Longitude: record.longitude,
+    "GPS Accuracy (m)": Math.round(record.accuracy),
+    "Detected Address": record.detectedAddress,
+    "Map Link": { link: record.mapLink, text: "View Location" },
+    "Location Status": "Live GPS captured",
+    "Submission Status": "Accepted",
+    Note: record.note || "",
+    "Device Type": record.deviceType,
+    "Location Method": record.locationMethod,
+  };
+
+  if (record.attendanceImageToken) {
+    fields["Attendance Image"] = [{ file_token: record.attendanceImageToken }];
+  }
 
   const response = await fetch(
     `https://open.larksuite.com/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records`,
@@ -160,23 +224,7 @@ export async function createAttendanceRecord(record: AttendanceRecord): Promise<
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json; charset=utf-8",
       },
-      body: JSON.stringify({
-        fields: {
-          "Attendance ID": attendanceId,
-          "Employee ID": record.employeeId,
-          "Employee Name": record.employeeName,
-          "Attendance Group": record.attendanceGroup,
-          "Attendance Type": record.attendanceType,
-          "Submitted At": record.submittedAt,
-          Latitude: record.latitude,
-          Longitude: record.longitude,
-          "GPS Accuracy (m)": Math.round(record.accuracy),
-          "Detected Address": record.detectedAddress,
-          "Map Link": { link: record.mapLink, text: "View Location" },
-          "Location Status": "Live GPS captured",
-          "Submission Status": "Accepted",
-        },
-      }),
+      body: JSON.stringify({ fields }),
       cache: "no-store",
     },
   );
@@ -185,16 +233,12 @@ export async function createAttendanceRecord(record: AttendanceRecord): Promise<
   if (!response.ok || data.code !== 0) {
     throw new Error(`Lark Base error: ${data.msg || response.statusText}`);
   }
+
   return data.data?.record?.record_id ?? "";
 }
 
 function toMultiUrl(url: string) {
-  return {
-    url,
-    android_url: url,
-    ios_url: url,
-    pc_url: url,
-  };
+  return { url, android_url: url, ios_url: url, pc_url: url };
 }
 
 function getGroupWebhook(attendanceGroup: AttendanceGroup): string {
@@ -205,9 +249,7 @@ function getGroupWebhook(attendanceGroup: AttendanceGroup): string {
   };
 
   const webhook = webhookByGroup[attendanceGroup] || process.env.LARK_GROUP_WEBHOOK;
-  if (!webhook) {
-    throw new Error(`Missing webhook for attendance group: ${attendanceGroup}`);
-  }
+  if (!webhook) throw new Error(`Missing webhook for attendance group: ${attendanceGroup}`);
   return webhook;
 }
 
@@ -220,6 +262,7 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
     day: "2-digit",
     year: "numeric",
   }).format(new Date(input.submittedAt));
+
   const time = new Intl.DateTimeFormat("en-PH", {
     timeZone: "Asia/Manila",
     hour: "2-digit",
@@ -231,11 +274,38 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
   const actionLabel = isCheckIn ? "Sign in" : "Sign out";
   const detailsBaseUrl = process.env.APP_PUBLIC_URL || "";
 
+  const optionalElements: Array<Record<string, unknown>> = [];
+
+  if (input.note) {
+    optionalElements.push({
+      tag: "div",
+      text: {
+        tag: "lark_md",
+        content: `**Note**\n${input.note}`,
+      },
+    });
+  }
+
+  if (input.attendanceImageToken) {
+    optionalElements.push({
+      tag: "note",
+      elements: [
+        {
+          tag: "plain_text",
+          content: "📎 Attendance image attached to the Lark Base record.",
+        },
+      ],
+    });
+  }
+
   const card = {
     config: { wide_screen_mode: true, enable_forward: true },
     header: {
       template: isCheckIn ? "blue" : "orange",
-      title: { tag: "plain_text", content: `${input.employeeName} — ${actionLabel}` },
+      title: {
+        tag: "plain_text",
+        content: `${input.employeeName} — ${actionLabel}`,
+      },
     },
     elements: [
       {
@@ -248,25 +318,57 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
       {
         tag: "div",
         fields: [
-          { is_short: true, text: { tag: "lark_md", content: `**${actionLabel} Date**\n${date}` } },
-          { is_short: true, text: { tag: "lark_md", content: `**${actionLabel} Time**\n${time}` } },
+          {
+            is_short: true,
+            text: {
+              tag: "lark_md",
+              content: `**${actionLabel} Date**\n${date}`,
+            },
+          },
+          {
+            is_short: true,
+            text: {
+              tag: "lark_md",
+              content: `**${actionLabel} Time**\n${time}`,
+            },
+          },
         ],
       },
       { tag: "hr" },
       {
         tag: "div",
-        text: { tag: "lark_md", content: `**Detected location**\n${input.detectedAddress}` },
+        text: {
+          tag: "lark_md",
+          content: `**Detected location**\n${input.detectedAddress}`,
+        },
       },
       {
         tag: "div",
         fields: [
-          { is_short: true, text: { tag: "lark_md", content: "**Location capture**\n✅ Live GPS" } },
           {
             is_short: true,
-            text: { tag: "lark_md", content: `**GPS accuracy**\n±${Math.round(input.accuracy)} meters` },
+            text: {
+              tag: "lark_md",
+              content: `**Device**\n${input.deviceType}`,
+            },
+          },
+          {
+            is_short: true,
+            text: {
+              tag: "lark_md",
+              content: `**Location method**\n${input.locationMethod}`,
+            },
+          },
+          {
+            is_short: true,
+            text: {
+              tag: "lark_md",
+              content: `**GPS accuracy**\n±${Math.round(input.accuracy)} meters`,
+            },
           },
         ],
       },
+      ...optionalElements,
       {
         tag: "action",
         actions: [
@@ -290,7 +392,12 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
       },
       {
         tag: "note",
-        elements: [{ tag: "plain_text", content: "Verified employee attendance saved to Lark Base." }],
+        elements: [
+          {
+            tag: "plain_text",
+            content: "Verified employee attendance saved to Lark Base.",
+          },
+        ],
       },
     ],
   };
@@ -301,8 +408,13 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
     body: JSON.stringify({ msg_type: "interactive", card }),
     cache: "no-store",
   });
+
   const responseText = await response.text();
-  if (!response.ok) throw new Error(`Lark group webhook error: ${response.status} ${responseText}`);
+
+  if (!response.ok) {
+    throw new Error(`Lark group webhook error: ${response.status} ${responseText}`);
+  }
+
   try {
     const data = JSON.parse(responseText) as { code?: number; msg?: string };
     if (typeof data.code === "number" && data.code !== 0) {
