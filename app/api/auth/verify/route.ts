@@ -29,10 +29,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const employee = await verifyEmployee({
-      employeeName,
-      mobileNumber,
-    });
+    const employee = await verifyEmployee({ employeeName, mobileNumber });
 
     if (!employee) {
       return NextResponse.json(
@@ -50,7 +47,7 @@ export async function POST(request: Request) {
         employeeId: employee.employeeId,
         employeeName: employee.employeeName,
         department: employee.department ?? "",
-        attendanceGroup: employee.attendanceGroup,
+        attendanceGroups: employee.attendanceGroups,
       },
     });
 
@@ -60,7 +57,7 @@ export async function POST(request: Request) {
         employeeId: employee.employeeId,
         employeeName: employee.employeeName,
         department: employee.department,
-        attendanceGroup: employee.attendanceGroup,
+        attendanceGroups: employee.attendanceGroups,
       }),
       sessionCookieOptions,
     );
