@@ -15,6 +15,7 @@ const MAX_DESKTOP_ACCURACY_METERS = 50_000;
 
 type DeviceType = "Mobile" | "Desktop";
 type AttendanceType = "Check In" | "Check Out";
+type AttendanceGroup = "Office" | "Warehouse" | "Promodiser" | "Field Work";
 
 function parseNumber(value: FormDataEntryValue | null, field: string): number {
   const parsed = Number(value);
@@ -30,6 +31,13 @@ function parseAttendanceType(value: FormDataEntryValue | null): AttendanceType {
 function parseDeviceType(value: FormDataEntryValue | null): DeviceType {
   if (value === "Mobile" || value === "Desktop") return value;
   throw new Error("Invalid device type.");
+}
+
+function parseAttendanceGroup(value: FormDataEntryValue | null): AttendanceGroup {
+  const validGroups: AttendanceGroup[] = ["Office", "Warehouse", "Promodiser", "Field Work"];
+  const group = String(value ?? "").trim() as AttendanceGroup;
+  if (!validGroups.includes(group)) throw new Error("Invalid attendance group.");
+  return group;
 }
 
 async function reverseGeocode(latitude: number, longitude: number): Promise<string> {
@@ -69,6 +77,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const attendanceType = parseAttendanceType(formData.get("attendanceType"));
     const deviceType = parseDeviceType(formData.get("deviceType"));
+    const attendanceGroup = parseAttendanceGroup(formData.get("attendanceGroup"));
     const latitude = parseNumber(formData.get("latitude"), "latitude");
     const longitude = parseNumber(formData.get("longitude"), "longitude");
     const accuracy = parseNumber(formData.get("accuracy"), "GPS accuracy");
@@ -78,6 +87,13 @@ export async function POST(request: Request) {
     if (latitude < -90 || latitude > 90) throw new Error("Invalid latitude.");
     if (longitude < -180 || longitude > 180) throw new Error("Invalid longitude.");
     if (accuracy <= 0) throw new Error("Invalid GPS accuracy.");
+
+    if (!session.attendanceGroups.includes(attendanceGroup)) {
+      return NextResponse.json(
+        { error: "You are not assigned to the selected attendance group." },
+        { status: 403 },
+      );
+    }
 
     const maxMobileAccuracy = Number(process.env.MAX_GPS_ACCURACY_METERS ?? 100);
     if (!Number.isFinite(maxMobileAccuracy)) {
@@ -145,7 +161,7 @@ export async function POST(request: Request) {
     const record = {
       employeeId: session.employeeId,
       employeeName: session.employeeName,
-      attendanceGroup: session.attendanceGroup,
+      attendanceGroup,
       attendanceType,
       latitude,
       longitude,
