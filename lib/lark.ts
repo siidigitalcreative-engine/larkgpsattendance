@@ -1,3 +1,5 @@
+import sharp from "sharp";
+
 type TenantTokenResponse = {
   code: number;
   msg: string;
@@ -184,9 +186,23 @@ export async function uploadAttendanceImage(
     throw new Error(`Lark image upload error: ${baseData.msg || baseResponse.statusText}`);
   }
 
+  // Create a fixed 16:9 thumbnail for the chat card so portrait and
+  // landscape uploads render at the same visual height.
+  const originalBuffer = Buffer.from(await file.arrayBuffer());
+  const thumbnailBuffer = await sharp(originalBuffer)
+    .rotate()
+    .resize(480, 270, {
+      fit: "cover",
+      position: "centre",
+    })
+    .jpeg({ quality: 82 })
+    .toBuffer();
+
+  const thumbnailBlob = new Blob([thumbnailBuffer], { type: "image/jpeg" });
+
   const messageFormData = new FormData();
   messageFormData.set("image_type", "message");
-  messageFormData.set("image", file, file.name || `attendance-${Date.now()}.jpg`);
+  messageFormData.set("image", thumbnailBlob, `attendance-thumbnail-${Date.now()}.jpg`);
 
   const messageResponse = await fetch(
     "https://open.larksuite.com/open-apis/im/v1/images",
