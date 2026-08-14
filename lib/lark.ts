@@ -4,7 +4,7 @@ type TenantTokenResponse = {
   tenant_access_token?: string;
 };
 
-type AttendanceGroup = "Office" | "Warehouse" | "Promodiser" | "Field Work";
+export type AttendanceGroup = "Office" | "Warehouse" | "Promodiser" | "Field Work";
 type DeviceType = "Mobile" | "Desktop";
 type LocationMethod = "Live GPS" | "Approximate Desktop Location";
 
@@ -13,7 +13,7 @@ type EmployeeRecord = {
   employeeName: string;
   department?: string;
   mobileNumber: string;
-  attendanceGroup: AttendanceGroup;
+  attendanceGroups: AttendanceGroup[];
   active: boolean;
 };
 
@@ -86,14 +86,24 @@ export async function listActiveEmployees(): Promise<EmployeeRecord[]> {
       const employeeName = String(fields["Full Name"] ?? "").trim();
       const department = String(fields["Department"] ?? "").trim();
       const mobileNumber = String(fields["Mobile Number"] ?? "").trim();
-      const attendanceGroup = String(fields["Attendance Group"] ?? "").trim();
+      const rawAttendanceGroups = fields["Attendance Group"];
+      const validGroups: AttendanceGroup[] = ["Office", "Warehouse", "Promodiser", "Field Work"];
+      const attendanceGroups = (
+        Array.isArray(rawAttendanceGroups)
+          ? rawAttendanceGroups.map((value) => String(value).trim())
+          : String(rawAttendanceGroups ?? "")
+              .split(",")
+              .map((value) => value.trim())
+      ).filter((group): group is AttendanceGroup =>
+        validGroups.includes(group as AttendanceGroup),
+      );
       const active = parseActive(fields.Active);
 
       if (
         employeeId &&
         employeeName &&
         mobileNumber &&
-        ["Office", "Warehouse", "Promodiser", "Field Work"].includes(attendanceGroup) &&
+        attendanceGroups.length > 0 &&
         active
       ) {
         employees.push({
@@ -101,7 +111,7 @@ export async function listActiveEmployees(): Promise<EmployeeRecord[]> {
           employeeName,
           department: department || undefined,
           mobileNumber,
-          attendanceGroup: attendanceGroup as AttendanceGroup,
+          attendanceGroups,
           active,
         });
       }
@@ -229,7 +239,7 @@ export async function createAttendanceRecord(record: AttendanceRecord): Promise<
     "Attendance ID": attendanceId,
     "Employee ID": record.employeeId,
     "Employee Name": record.employeeName,
-    "Attendance Group": record.attendanceGroup,
+    "Attendance Group": [record.attendanceGroup],
     "Attendance Type": record.attendanceType,
     "Submitted At": record.submittedAt,
     Latitude: record.latitude,
@@ -287,8 +297,6 @@ function getGroupWebhook(attendanceGroup: AttendanceGroup): string {
 }
 
 export async function sendGroupNotification(input: AttendanceRecord): Promise<void> {
-  const webhook = getGroupWebhook(input.attendanceGroup);
-
   const date = new Intl.DateTimeFormat("en-PH", {
     timeZone: "Asia/Manila",
     month: "2-digit",
@@ -473,6 +481,8 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
       },
     ],
   };
+
+  const webhook = getGroupWebhook(input.attendanceGroup);
 
   const response = await fetch(webhook, {
     method: "POST",
