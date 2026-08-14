@@ -3,11 +3,13 @@ import crypto from "crypto";
 export const SESSION_COOKIE_NAME = "lark_attendance_session";
 const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 365 * 10;
 
+export type AttendanceGroup = "Office" | "Warehouse" | "Promodiser" | "Field Work";
+
 type SessionPayload = {
   employeeId: string;
   employeeName: string;
   department?: string;
-  attendanceGroup: "Office" | "Warehouse" | "Promodiser";
+  attendanceGroups: AttendanceGroup[];
   exp: number;
 };
 
@@ -35,7 +37,7 @@ export function createSessionToken(input: {
   employeeId: string;
   employeeName: string;
   department?: string;
-  attendanceGroup: "Office" | "Warehouse" | "Promodiser";
+  attendanceGroups: AttendanceGroup[];
 }): string {
   const payload: SessionPayload = {
     ...input,
@@ -47,25 +49,32 @@ export function createSessionToken(input: {
 
 export function verifySessionToken(token?: string | null): SessionPayload | null {
   if (!token) return null;
+
   const [encodedPayload, signature] = token.split(".");
   if (!encodedPayload || !signature) return null;
 
   const expected = sign(encodedPayload);
   const actualBuffer = Buffer.from(signature);
   const expectedBuffer = Buffer.from(expected);
+
   if (actualBuffer.length !== expectedBuffer.length) return null;
   if (!crypto.timingSafeEqual(actualBuffer, expectedBuffer)) return null;
 
   try {
     const payload = JSON.parse(decode(encodedPayload)) as SessionPayload;
+    const validGroups: AttendanceGroup[] = ["Office", "Warehouse", "Promodiser", "Field Work"];
+
     if (
       !payload.employeeId ||
       !payload.employeeName ||
-      !["Office", "Warehouse", "Promodiser"].includes(payload.attendanceGroup) ||
+      !Array.isArray(payload.attendanceGroups) ||
+      payload.attendanceGroups.length === 0 ||
+      !payload.attendanceGroups.every((group) => validGroups.includes(group)) ||
       payload.exp <= Math.floor(Date.now() / 1000)
     ) {
       return null;
     }
+
     return payload;
   } catch {
     return null;
