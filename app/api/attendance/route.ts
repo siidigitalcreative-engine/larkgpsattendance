@@ -116,6 +116,7 @@ export async function POST(request: Request) {
 
     const imageEntry = formData.get("image");
     let attendanceImageToken: string | undefined;
+    let attendanceImageKey: string | undefined;
 
     if (imageEntry instanceof File && imageEntry.size > 0) {
       if (!imageEntry.type.startsWith("image/")) {
@@ -130,7 +131,9 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      attendanceImageToken = await uploadAttendanceImage(imageEntry);
+      const uploadedImage = await uploadAttendanceImage(imageEntry);
+      attendanceImageToken = uploadedImage.fileToken;
+      attendanceImageKey = uploadedImage.imageKey;
     }
 
     const submittedAt = Date.now();
@@ -152,6 +155,7 @@ export async function POST(request: Request) {
       submittedAt,
       note,
       attendanceImageToken,
+      attendanceImageKey,
       deviceType,
       locationMethod,
     } as const;
