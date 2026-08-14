@@ -131,7 +131,16 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      const uploadedImage = await uploadAttendanceImage(imageEntry);
+      const thumbnailEntry = formData.get("thumbnail");
+      const thumbnailFile =
+        thumbnailEntry instanceof File && thumbnailEntry.size > 0
+          ? thumbnailEntry
+          : imageEntry;
+
+      const uploadedImage = await uploadAttendanceImage(
+        imageEntry,
+        thumbnailFile,
+      );
       attendanceImageToken = uploadedImage.fileToken;
       attendanceImageKey = uploadedImage.imageKey;
     }
