@@ -157,11 +157,11 @@ type AttendanceRecord = {
 
 export async function uploadAttendanceImage(
   file: File,
-  thumbnailFile: File,
 ): Promise<{ fileToken: string; imageKey: string }> {
   const token = await getTenantAccessToken();
   const { appToken } = getBaseConfig();
 
+  // Original image for the Lark Base attachment.
   const baseFormData = new FormData();
   baseFormData.set("file_name", file.name || `attendance-${Date.now()}.jpg`);
   baseFormData.set("parent_type", "bitable_image");
@@ -185,13 +185,11 @@ export async function uploadAttendanceImage(
     throw new Error(`Lark image upload error: ${baseData.msg || baseResponse.statusText}`);
   }
 
+  // Same original image for the card. The card displays it as a small,
+  // uncropped thumbnail and Lark's preview opens the full image.
   const messageFormData = new FormData();
   messageFormData.set("image_type", "message");
-  messageFormData.set(
-    "image",
-    thumbnailFile,
-    thumbnailFile.name || `attendance-thumbnail-${Date.now()}.jpg`,
-  );
+  messageFormData.set("image", file, file.name || `attendance-${Date.now()}.jpg`);
 
   const messageResponse = await fetch(
     "https://open.larksuite.com/open-apis/im/v1/images",
@@ -328,15 +326,46 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
         content: "**Attendance Image**",
       },
     });
+
     optionalElements.push({
-      tag: "img",
-      img_key: input.attendanceImageKey,
-      alt: {
-        tag: "plain_text",
-        content: `${input.employeeName} attendance image`,
-      },
-      mode: "fit_horizontal",
-      preview: true,
+      tag: "column_set",
+      flex_mode: "none",
+      background_style: "default",
+      columns: [
+        {
+          tag: "column",
+          width: "weighted",
+          weight: 1,
+          vertical_align: "top",
+          elements: [
+            {
+              tag: "img",
+              img_key: input.attendanceImageKey,
+              alt: {
+                tag: "plain_text",
+                content: `${input.employeeName} attendance image`,
+              },
+              mode: "fit_horizontal",
+              preview: true,
+            },
+          ],
+        },
+        {
+          tag: "column",
+          width: "weighted",
+          weight: 2,
+          vertical_align: "top",
+          elements: [
+            {
+              tag: "div",
+              text: {
+                tag: "plain_text",
+                content: " ",
+              },
+            },
+          ],
+        },
+      ],
     });
   }
 
