@@ -343,6 +343,7 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
               },
               mode: "crop_center",
               preview: true,
+              compact_width: true,
             },
           ],
         },
