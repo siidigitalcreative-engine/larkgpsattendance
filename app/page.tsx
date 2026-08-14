@@ -11,10 +11,13 @@ type Position = {
 
 type DeviceType = "Mobile" | "Desktop";
 
+type AttendanceGroup = "Office" | "Warehouse" | "Promodiser" | "Field Work";
+
 type Employee = {
   employeeId: string;
   employeeName: string;
   department?: string;
+  attendanceGroups?: AttendanceGroup[];
 };
 
 type EmployeeOption = {
@@ -48,6 +51,7 @@ export default function Home() {
   const [mobileNumber, setMobileNumber] = useState("");
   const [search, setSearch] = useState("");
   const [attendanceType, setAttendanceType] = useState<"Check In" | "Check Out">("Check In");
+  const [selectedAttendanceGroup, setSelectedAttendanceGroup] = useState<AttendanceGroup | "">("");
   const [position, setPosition] = useState<Position | null>(null);
   const [deviceType, setDeviceType] = useState<DeviceType>("Desktop");
   const [note, setNote] = useState("");
@@ -67,6 +71,8 @@ export default function Home() {
 
         if (sessionData.authenticated) {
           setEmployee(sessionData.employee);
+          const groups = (sessionData.employee?.attendanceGroups || []) as AttendanceGroup[];
+          setSelectedAttendanceGroup(groups.length === 1 ? groups[0] : "");
           setStatus("Ready to capture your location.");
           return;
         }
@@ -123,6 +129,8 @@ export default function Home() {
       if (!response.ok) throw new Error(data.error || "Verification failed.");
 
       setEmployee(data.employee);
+      const groups = (data.employee?.attendanceGroups || []) as AttendanceGroup[];
+      setSelectedAttendanceGroup(groups.length === 1 ? groups[0] : "");
       setStatus("Identity verified. You will stay signed in on this device until you sign out or clear browser data.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Verification failed.");
@@ -141,6 +149,7 @@ export default function Home() {
     setSelectedName("");
     setMobileNumber("");
     setPosition(null);
+    setSelectedAttendanceGroup("");
     setNote("");
     setAttendanceImage(null);
     setImagePreviewUrl("");
@@ -242,6 +251,15 @@ export default function Home() {
       return;
     }
 
+    const employeeGroups = employee?.attendanceGroups || [];
+    const attendanceGroup =
+      employeeGroups.length === 1 ? employeeGroups[0] : selectedAttendanceGroup;
+
+    if (!attendanceGroup) {
+      setStatus("Select the attendance group for this check-in/check-out.");
+      return;
+    }
+
     setBusy(true);
     setStatus("Saving your attendance…");
 
@@ -253,6 +271,7 @@ export default function Home() {
       formData.set("accuracy", String(position.accuracy));
       formData.set("capturedAt", String(position.capturedAt));
       formData.set("deviceType", deviceType);
+      formData.set("attendanceGroup", attendanceGroup);
       formData.set("note", note.trim());
 
       if (attendanceImage) {
@@ -445,6 +464,43 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+
+              {(employee.attendanceGroups?.length || 0) > 1 ? (
+                <label style={{ marginTop: 14 }}>
+                  Attendance Group
+                  <select
+                    value={selectedAttendanceGroup}
+                    onChange={(event) =>
+                      setSelectedAttendanceGroup(event.target.value as AttendanceGroup)
+                    }
+                    required
+                    style={{
+                      width: "100%",
+                      marginTop: 8,
+                      padding: "12px 14px",
+                      border: "1px solid #d8dee8",
+                      borderRadius: 12,
+                      background: "#ffffff",
+                      font: "inherit",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <option value="">Select where you are working</option>
+                    {employee.attendanceGroups?.map((group) => (
+                      <option key={group} value={group}>
+                        {group}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="field-hint">
+                    Choose the group for this specific check-in or check-out.
+                  </span>
+                </label>
+              ) : employee.attendanceGroups?.[0] ? (
+                <div style={{ margin: "12px 0", padding: "10px 12px", borderRadius: 12, background: "#f8fafc", border: "1px solid #e4e7ec", color: "#344054", fontSize: 13 }}>
+                  <strong>Attendance Group:</strong> {employee.attendanceGroups[0]}
+                </div>
+              ) : null}
 
               <button className="secondary" type="button" onClick={captureLocation} disabled={busy}>
                 {position ? "Refresh Live Location" : "Capture Live Location"}
