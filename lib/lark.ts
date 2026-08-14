@@ -4,7 +4,7 @@ type TenantTokenResponse = {
   tenant_access_token?: string;
 };
 
-type AttendanceGroup = "Office" | "Warehouse" | "Promodiser";
+type AttendanceGroup = "Office" | "Warehouse" | "Promodiser" | "Field Work";
 type DeviceType = "Mobile" | "Desktop";
 type LocationMethod = "Live GPS" | "Approximate Desktop Location";
 
@@ -93,7 +93,7 @@ export async function listActiveEmployees(): Promise<EmployeeRecord[]> {
         employeeId &&
         employeeName &&
         mobileNumber &&
-        ["Office", "Warehouse", "Promodiser"].includes(attendanceGroup) &&
+        ["Office", "Warehouse", "Promodiser", "Field Work"].includes(attendanceGroup) &&
         active
       ) {
         employees.push({
@@ -278,6 +278,7 @@ function getGroupWebhook(attendanceGroup: AttendanceGroup): string {
     Office: process.env.LARK_GROUP_WEBHOOK_OFFICE,
     Warehouse: process.env.LARK_GROUP_WEBHOOK_WAREHOUSE,
     Promodiser: process.env.LARK_GROUP_WEBHOOK_PROMODISER,
+    "Field Work": process.env.LARK_GROUP_WEBHOOK_FIELD_WORK,
   };
 
   const webhook = webhookByGroup[attendanceGroup] || process.env.LARK_GROUP_WEBHOOK;
