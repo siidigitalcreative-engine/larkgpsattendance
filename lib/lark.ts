@@ -346,21 +346,7 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
             },
           ],
         },
-        {
-          tag: "column",
-          width: "weighted",
-          weight: 2,
-          vertical_align: "top",
-          elements: [
-            {
-              tag: "div",
-              text: {
-                tag: "lark_md",
-                content: "Tap the thumbnail to preview the full attendance image.",
-              },
-            },
-          ],
-        },
+
       ],
     });
   }
@@ -423,7 +409,10 @@ export async function sendGroupNotification(input: AttendanceRecord): Promise<vo
             is_short: true,
             text: {
               tag: "lark_md",
-              content: `**Location method**\n${input.locationMethod}`,
+              content:
+                input.deviceType === "Desktop"
+                  ? `**Location method**\n<font color='red'>${input.locationMethod}</font>`
+                  : `**Location method**\n${input.locationMethod}`,
             },
           },
           {
