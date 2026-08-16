@@ -239,7 +239,7 @@ export async function createAttendanceRecord(record: AttendanceRecord): Promise<
     "Attendance ID": attendanceId,
     "Employee ID": record.employeeId,
     "Employee Name": record.employeeName,
-    "Attendance Group": [record.attendanceGroup],
+    "Attendance Group": record.attendanceGroup,
     "Attendance Type": record.attendanceType,
     "Submitted At": record.submittedAt,
     Latitude: record.latitude,
