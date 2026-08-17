@@ -591,55 +591,66 @@ export default function Home() {
 
   return (
     <main className="shell">
-      <section className="card" style={{ position: "relative" }}>
-        <button
-          type="button"
-          onClick={refreshAttendancePage}
-          disabled={busy}
-          aria-label="Refresh attendance page"
-          title="Refresh attendance"
+      <section className="card">
+        <div
           style={{
-            position: "absolute",
-            top: 16,
-            right: 16,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 7,
-            height: 34,
-            padding: "0 12px",
-            border: "1px solid #e4e7ec",
-            borderRadius: 999,
-            background: "#f8fafc",
-            color: "#475467",
-            fontSize: 12,
-            fontWeight: 700,
-            lineHeight: 1,
-            boxShadow: "0 1px 2px rgba(16, 24, 40, 0.04)",
-            cursor: busy ? "not-allowed" : "pointer",
-            opacity: busy ? 0.55 : 1,
-            WebkitTapHighlightColor: "transparent",
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 18,
+            marginBottom: 10,
           }}
         >
-          <span
-            aria-hidden="true"
+          <div style={{ minWidth: 0, paddingTop: 2 }}>
+            <div className="eyebrow">LARK ATTENDANCE</div>
+          </div>
+
+          <button
+            type="button"
+            onClick={refreshAttendancePage}
+            disabled={busy}
+            aria-label="Refresh attendance page"
+            title="Refresh attendance"
             style={{
-              display: "inline-grid",
-              placeItems: "center",
-              width: 16,
-              height: 16,
-              fontSize: 16,
+              flex: "0 0 auto",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 7,
+              height: 34,
+              padding: "0 12px",
+              border: "1px solid #e4e7ec",
+              borderRadius: 999,
+              background: "#f8fafc",
+              color: "#475467",
+              fontSize: 12,
+              fontWeight: 700,
               lineHeight: 1,
-              transform: "translateY(-0.5px)",
+              boxShadow: "0 1px 2px rgba(16, 24, 40, 0.04)",
+              cursor: busy ? "not-allowed" : "pointer",
+              opacity: busy ? 0.55 : 1,
+              WebkitTapHighlightColor: "transparent",
             }}
           >
-            ↻
-          </span>
-          <span>Refresh</span>
-        </button>
+            <span
+              aria-hidden="true"
+              style={{
+                display: "inline-grid",
+                placeItems: "center",
+                width: 16,
+                height: 16,
+                fontSize: 16,
+                lineHeight: 1,
+                transform: "translateY(-0.5px)",
+              }}
+            >
+              ↻
+            </span>
+            <span>Refresh</span>
+          </button>
+        </div>
 
-        <div className="eyebrow" style={{ paddingRight: 96 }}>LARK ATTENDANCE</div>
-        <h1>GPS Check-In / Check-Out</h1>
+        <h1 style={{ marginTop: 6 }}>GPS Check-In / Check-Out</h1>
 
         {loading ? (
           <p className="intro">Loading…</p>
