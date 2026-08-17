@@ -618,24 +618,30 @@ export default function Home() {
               aria-label="Refresh attendance page"
               title="Refresh attendance"
               style={{
-                width: 32,
-                height: 32,
-                flex: "0 0 32px",
-                display: "grid",
-                placeItems: "center",
-                border: "1px solid #e5e7eb",
+                flex: "0 0 auto",
+                height: 34,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 7,
+                padding: "0 11px",
+                border: "1px solid #b9ccff",
                 borderRadius: 8,
-                background: "#ffffff",
-                color: "#667085",
-                fontSize: 17,
+                background: "#f2f6ff",
+                color: "#245bdb",
+                fontSize: 12,
+                fontWeight: 700,
                 lineHeight: 1,
-                boxShadow: "0 1px 2px rgba(16, 24, 40, 0.03)",
+                boxShadow: "0 1px 2px rgba(36, 91, 219, 0.08)",
                 cursor: busy ? "not-allowed" : "pointer",
-                opacity: busy ? 0.5 : 1,
+                opacity: busy ? 0.55 : 1,
                 WebkitTapHighlightColor: "transparent",
               }}
             >
-              ↻
+              <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>
+                ↻
+              </span>
+              <span>Refresh</span>
             </button>
           </div>
 
