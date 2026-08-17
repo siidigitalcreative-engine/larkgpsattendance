@@ -600,22 +600,45 @@ export default function Home() {
           title="Refresh attendance"
           style={{
             position: "absolute",
-            top: 18,
-            right: 18,
-            border: 0,
-            background: "transparent",
-            color: "#667085",
+            top: 16,
+            right: 16,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 7,
+            height: 34,
+            padding: "0 12px",
+            border: "1px solid #e4e7ec",
+            borderRadius: 999,
+            background: "#f8fafc",
+            color: "#475467",
             fontSize: 12,
             fontWeight: 700,
-            padding: "6px 8px",
+            lineHeight: 1,
+            boxShadow: "0 1px 2px rgba(16, 24, 40, 0.04)",
             cursor: busy ? "not-allowed" : "pointer",
-            opacity: busy ? 0.5 : 1,
+            opacity: busy ? 0.55 : 1,
+            WebkitTapHighlightColor: "transparent",
           }}
         >
-          ↻ Refresh
+          <span
+            aria-hidden="true"
+            style={{
+              display: "inline-grid",
+              placeItems: "center",
+              width: 16,
+              height: 16,
+              fontSize: 16,
+              lineHeight: 1,
+              transform: "translateY(-0.5px)",
+            }}
+          >
+            ↻
+          </span>
+          <span>Refresh</span>
         </button>
 
-        <div className="eyebrow" style={{ paddingRight: 72 }}>LARK ATTENDANCE</div>
+        <div className="eyebrow" style={{ paddingRight: 96 }}>LARK ATTENDANCE</div>
         <h1>GPS Check-In / Check-Out</h1>
 
         {loading ? (
