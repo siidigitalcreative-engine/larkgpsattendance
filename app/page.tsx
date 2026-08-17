@@ -303,7 +303,7 @@ export default function Home() {
     window.location.reload();
   }
 
-  function captureLocation() {
+  async function captureLocation() {
     setStatus(
       deviceType === "Desktop"
         ? "Getting your desktop browser location…"
@@ -314,6 +314,26 @@ export default function Home() {
     if (!navigator.geolocation) {
       setStatus("This browser does not support location services.");
       return;
+    }
+
+    // Where supported, detect a previously blocked permission before asking
+    // the browser for GPS. iOS/Safari may not expose this permission query,
+    // so the normal geolocation request remains the fallback.
+    if (deviceType === "Mobile" && navigator.permissions?.query) {
+      try {
+        const permission = await navigator.permissions.query({
+          name: "geolocation" as PermissionName,
+        });
+
+        if (permission.state === "denied") {
+          setStatus(
+            "Location access is blocked for this site. Please allow Location for this site in your browser settings, then tap Capture Live Location again.",
+          );
+          return;
+        }
+      } catch {
+        // Continue to the normal browser geolocation request.
+      }
     }
 
     const savePosition = (result: GeolocationPosition) => {
@@ -335,7 +355,7 @@ export default function Home() {
 
     const locationErrorMessage = (error: GeolocationPositionError) => {
       if (error.code === 1) {
-        return "Please turn on Location and allow this browser to use your location, then tap Capture Live Location again.";
+        return "Location access is blocked or unavailable. Please turn on Location and allow this site to use it, then tap Capture Live Location again.";
       }
       if (error.code === 2) {
         return "Please turn on Location and allow this browser to use your location, then tap Capture Live Location again.";
@@ -571,8 +591,31 @@ export default function Home() {
 
   return (
     <main className="shell">
-      <section className="card">
-        <div className="eyebrow">LARK ATTENDANCE</div>
+      <section className="card" style={{ position: "relative" }}>
+        <button
+          type="button"
+          onClick={refreshAttendancePage}
+          disabled={busy}
+          aria-label="Refresh attendance page"
+          title="Refresh attendance"
+          style={{
+            position: "absolute",
+            top: 18,
+            right: 18,
+            border: 0,
+            background: "transparent",
+            color: "#667085",
+            fontSize: 12,
+            fontWeight: 700,
+            padding: "6px 8px",
+            cursor: busy ? "not-allowed" : "pointer",
+            opacity: busy ? 0.5 : 1,
+          }}
+        >
+          ↻ Refresh
+        </button>
+
+        <div className="eyebrow" style={{ paddingRight: 72 }}>LARK ATTENDANCE</div>
         <h1>GPS Check-In / Check-Out</h1>
 
         {loading ? (
@@ -688,9 +731,6 @@ export default function Home() {
                 {busy ? "Verifying…" : "Verify and Continue"}
               </button>
 
-              <button className="secondary" type="button" onClick={refreshAttendancePage} disabled={busy}>
-                Refresh Attendance
-              </button>
             </form>
           </>
         ) : (
@@ -834,9 +874,6 @@ export default function Home() {
                 {busy ? "Submitting…" : `Submit ${attendanceType}`}
               </button>
 
-              <button className="secondary" type="button" onClick={refreshAttendancePage} disabled={busy}>
-                Refresh Attendance
-              </button>
 
               <button className="secondary" type="button" onClick={logout} disabled={busy}>
                 Not you? Change employee
