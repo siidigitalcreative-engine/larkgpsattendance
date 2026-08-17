@@ -13,6 +13,8 @@ type DeviceType = "Mobile" | "Desktop";
 
 type AttendanceGroup = "Office" | "Warehouse" | "Promodiser" | "Field Work";
 
+const REMEMBERED_IDENTITY_KEY = "larkAttendanceRememberedIdentity";
+
 type Employee = {
   employeeId: string;
   employeeName: string;
@@ -60,9 +62,26 @@ export default function Home() {
   const [status, setStatus] = useState("Loading your attendance account…");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [successResult, setSuccessResult] = useState<{ type: "Check In" | "Check Out"; address: string } | null>(null);
 
   useEffect(() => {
     setDeviceType(detectDeviceType());
+
+    try {
+      const remembered = window.localStorage.getItem(REMEMBERED_IDENTITY_KEY);
+      if (remembered) {
+        const parsed = JSON.parse(remembered) as { employeeName?: string; mobileNumber?: string };
+        if (parsed.employeeName) {
+          setSelectedName(parsed.employeeName);
+          setSearch(parsed.employeeName);
+        }
+        if (parsed.mobileNumber) {
+          setMobileNumber(parsed.mobileNumber.replace(/\D/g, "").slice(0, 10));
+        }
+      }
+    } catch {
+      // Ignore unavailable/corrupt local storage and continue normally.
+    }
 
     async function initialize() {
       try {
@@ -131,7 +150,20 @@ export default function Home() {
       setEmployee(data.employee);
       const groups = (data.employee?.attendanceGroups || []) as AttendanceGroup[];
       setSelectedAttendanceGroup(groups.length === 1 ? groups[0] : "");
-      setStatus("Identity verified. You will stay signed in on this device until you sign out or clear browser data.");
+
+      try {
+        window.localStorage.setItem(
+          REMEMBERED_IDENTITY_KEY,
+          JSON.stringify({
+            employeeName: data.employee?.employeeName || selectedName,
+            mobileNumber,
+          }),
+        );
+      } catch {
+        // Remembering the form is optional; verification still succeeds.
+      }
+
+      setStatus("Identity verified. Your name and mobile number are remembered on this device.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Verification failed.");
     } finally {
@@ -145,8 +177,15 @@ export default function Home() {
 
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
 
+    try {
+      window.localStorage.removeItem(REMEMBERED_IDENTITY_KEY);
+    } catch {
+      // Continue even if local storage is unavailable.
+    }
+
     setEmployee(null);
     setSelectedName("");
+    setSearch("");
     setMobileNumber("");
     setPosition(null);
     setSelectedAttendanceGroup("");
@@ -155,6 +194,24 @@ export default function Home() {
     setImagePreviewUrl("");
     setStatus("Select your name and enter your registered mobile number.");
     setBusy(false);
+  }
+
+  async function returnToRememberedLogin() {
+    await fetch("/api/auth/logout", { method: "POST" });
+
+    setEmployee(null);
+    setPosition(null);
+    setSelectedAttendanceGroup("");
+    setNote("");
+    setAttendanceImage(null);
+
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+      setImagePreviewUrl("");
+    }
+
+    setSuccessResult(null);
+    setStatus("Your name and mobile number are ready. Tap Verify and Continue.");
   }
 
   function captureLocation() {
@@ -331,14 +388,15 @@ export default function Home() {
         throw new Error(data.error || "Attendance submission failed.");
       }
 
-      setStatus(`Success: ${attendanceType} recorded at ${data.detectedAddress}.`);
-      setNote("");
-      setAttendanceImage(null);
+      setSuccessResult({
+        type: attendanceType,
+        address: data.detectedAddress,
+      });
+      setStatus(`Success: ${attendanceType} recorded.`);
 
-      if (imagePreviewUrl) {
-        URL.revokeObjectURL(imagePreviewUrl);
-        setImagePreviewUrl("");
-      }
+      setTimeout(() => {
+        void returnToRememberedLogin();
+      }, 3000);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Attendance submission failed.");
     } finally {
@@ -351,6 +409,76 @@ export default function Home() {
     /do not match|invalid employee|verification failed|select your name first/i.test(status);
 
   const isIdentityVerified = /identity verified/i.test(status);
+
+  if (successResult) {
+    return (
+      <main
+        className="shell"
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          padding: 20,
+        }}
+      >
+        <section
+          className="card"
+          style={{
+            width: "100%",
+            maxWidth: 520,
+            textAlign: "center",
+            padding: "42px 26px",
+          }}
+        >
+          <div
+            aria-hidden="true"
+            style={{
+              width: 78,
+              height: 78,
+              margin: "0 auto 20px",
+              borderRadius: "50%",
+              display: "grid",
+              placeItems: "center",
+              background: "#ecfdf3",
+              color: "#067647",
+              fontSize: 42,
+              fontWeight: 800,
+            }}
+          >
+            ✓
+          </div>
+
+          <div className="eyebrow">ATTENDANCE SAVED</div>
+          <h1 style={{ marginBottom: 10 }}>
+            {successResult.type === "Check In" ? "Check-In Successful" : "Check-Out Successful"}
+          </h1>
+          <p className="intro" style={{ marginBottom: 12 }}>
+            Your attendance has been successfully recorded.
+          </p>
+          <p
+            style={{
+              margin: "0 auto 18px",
+              color: "#667085",
+              fontSize: 13,
+              lineHeight: 1.5,
+              maxWidth: 420,
+            }}
+          >
+            {successResult.address}
+          </p>
+          <p
+            style={{
+              margin: 0,
+              color: "#98a2b3",
+              fontSize: 12,
+            }}
+          >
+            Returning to attendance login…
+          </p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="shell">
