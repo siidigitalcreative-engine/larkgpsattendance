@@ -1,16 +1,70 @@
 :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; }
 * { box-sizing: border-box; }
-body { margin: 0; background: #f4f6f8; color: #172033; }
-button, input { font: inherit; }
-.shell { min-height: 100dvh; padding: 24px 16px; display: grid; place-items: center; }
-.card { width: min(100%, 460px); background: white; border-radius: 20px; padding: 28px; box-shadow: 0 14px 40px rgba(23,32,51,.10); }
+html {
+  width: 100%;
+  min-height: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  overflow-x: hidden;
+  background: #f4f6f8;
+  color: #172033;
+}
+button, input, select, textarea { font: inherit; }
+
+/*
+  Keep the form anchored instead of re-centering when the mobile keyboard
+  changes the visible viewport height.
+*/
+.shell {
+  min-height: 100svh;
+  padding: 24px 16px;
+  display: grid;
+  align-items: start;
+  justify-items: center;
+}
+
+.card {
+  width: min(100%, 460px);
+  margin: 0 auto;
+  background: white;
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 14px 40px rgba(23,32,51,.10);
+}
+
 .eyebrow { font-size: 12px; letter-spacing: .15em; font-weight: 700; color: #5b6b85; }
 h1 { margin: 8px 0 10px; font-size: 28px; }
 .intro { margin: 0 0 24px; color: #5b6474; line-height: 1.5; }
 form { display: grid; gap: 16px; }
 label { display: grid; gap: 7px; font-size: 14px; font-weight: 700; }
-input { width: 100%; border: 1px solid #d8dee8; border-radius: 12px; padding: 12px 14px; outline: none; }
-input:focus { border-color: #3370ff; box-shadow: 0 0 0 3px rgba(51,112,255,.12); }
+
+/*
+  iPhone/iOS Safari zooms the whole page when an input below 16px receives
+  focus. Keeping form controls at 16px prevents that jump/sideways crop.
+*/
+input,
+select,
+textarea {
+  width: 100%;
+  font-size: 16px;
+}
+
+input {
+  border: 1px solid #d8dee8;
+  border-radius: 12px;
+  padding: 12px 14px;
+  outline: none;
+}
+
+input:focus {
+  border-color: #3370ff;
+  box-shadow: 0 0 0 3px rgba(51,112,255,.12);
+}
+
 .segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f0f2f5; padding: 5px; border-radius: 12px; }
 .segmented button { border: 0; border-radius: 9px; padding: 11px; background: transparent; cursor: pointer; }
 .segmented button.active { background: white; box-shadow: 0 2px 8px rgba(23,32,51,.08); font-weight: 700; }
@@ -20,7 +74,6 @@ input:focus { border-color: #3370ff; box-shadow: 0 0 0 3px rgba(51,112,255,.12);
 button:disabled { cursor: not-allowed; opacity: .55; }
 .status { margin-top: 18px; border-radius: 12px; padding: 12px 14px; background: #f5f7fa; color: #38445a; line-height: 1.45; }
 .privacy { margin: 14px 0 0; color: #7a8495; font-size: 12px; line-height: 1.45; }
-/* Add these rules to the bottom of app/styles.css */
 
 .phone-input {
   display: flex;
@@ -57,6 +110,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
+  font-size: 16px !important;
 }
 
 .field-hint {
@@ -66,7 +120,6 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-size: 12px;
   font-weight: 400;
 }
-/* Add these rules to the bottom of app/styles.css */
 
 .map-preview {
   margin: 14px 0;
@@ -124,7 +177,22 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border: 0;
 }
 
+@media (min-width: 700px) {
+  .shell {
+    min-height: 100dvh;
+    align-items: center;
+  }
+}
+
 @media (max-width: 480px) {
+  .shell {
+    padding: 16px 12px 32px;
+  }
+
+  .card {
+    padding: 22px 18px;
+  }
+
   .map-preview-header {
     align-items: flex-start;
   }
