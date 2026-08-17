@@ -246,13 +246,13 @@ export default function Home() {
 
     const locationErrorMessage = (error: GeolocationPositionError) => {
       if (error.code === 1) {
-        return "Location permission is blocked. Enable Location for this browser/site in your phone settings, then tap Capture Live Location again.";
+        return "Please turn on Location and allow this browser to use your location, then tap Capture Live Location again.";
       }
       if (error.code === 2) {
-        return "Your phone could not determine its location. Make sure Location/GPS is ON, then move near a window or outdoors and try again.";
+        return "Please turn on Location and allow this browser to use your location, then tap Capture Live Location again.";
       }
       if (error.code === 3) {
-        return "Location is taking too long. Make sure Location/GPS is ON and try again near a window or outdoors.";
+        return "Location is taking a little longer. Keep Location on, then tap Capture Live Location again.";
       }
       return error.message || "Unable to get your location.";
     };
