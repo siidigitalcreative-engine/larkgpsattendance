@@ -598,7 +598,7 @@ export default function Home() {
             alignItems: "flex-start",
             justifyContent: "space-between",
             gap: 18,
-            marginBottom: 10,
+            marginBottom: 2,
           }}
         >
           <div style={{ minWidth: 0, paddingTop: 2 }}>
@@ -650,7 +650,7 @@ export default function Home() {
           </button>
         </div>
 
-        <h1 style={{ marginTop: 6 }}>GPS Check-In / Check-Out</h1>
+        <h1 style={{ marginTop: 2 }}>GPS Check-In / Check-Out</h1>
 
         {loading ? (
           <p className="intro">Loading…</p>
