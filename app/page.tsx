@@ -158,7 +158,11 @@ export default function Home() {
   }
 
   function captureLocation() {
-    setStatus(deviceType === "Desktop" ? "Getting your desktop browser location…" : "Getting your live GPS location…");
+    setStatus(
+      deviceType === "Desktop"
+        ? "Getting your desktop browser location…"
+        : "Getting your live GPS location…",
+    );
     setPosition(null);
 
     if (!navigator.geolocation) {
@@ -166,27 +170,64 @@ export default function Home() {
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (result) => {
-        setPosition({
-          latitude: result.coords.latitude,
-          longitude: result.coords.longitude,
-          accuracy: result.coords.accuracy,
-          capturedAt: result.timestamp,
-        });
+    const savePosition = (result: GeolocationPosition) => {
+      setPosition({
+        latitude: result.coords.latitude,
+        longitude: result.coords.longitude,
+        accuracy: result.coords.accuracy,
+        // Use the moment this app receives the location. Some Android browsers
+        // return an older provider timestamp even for a newly requested fix.
+        capturedAt: Date.now(),
+      });
 
-        setStatus(
-          deviceType === "Desktop"
-            ? `Desktop location captured with ±${Math.round(result.coords.accuracy)} m accuracy.`
-            : `Live location captured with ±${Math.round(result.coords.accuracy)} m accuracy.`,
-        );
+      setStatus(
+        deviceType === "Desktop"
+          ? `Desktop location captured with ±${Math.round(result.coords.accuracy)} m accuracy.`
+          : `Live location captured with ±${Math.round(result.coords.accuracy)} m accuracy.`,
+      );
+    };
+
+    const locationErrorMessage = (error: GeolocationPositionError) => {
+      if (error.code === 1) {
+        return "Location permission is blocked. Enable Location for this browser/site in your phone settings, then tap Capture Live Location again.";
+      }
+      if (error.code === 2) {
+        return "Your phone could not determine its location. Make sure Location/GPS is ON, then move near a window or outdoors and try again.";
+      }
+      if (error.code === 3) {
+        return "Location is taking too long. Make sure Location/GPS is ON and try again near a window or outdoors.";
+      }
+      return error.message || "Unable to get your location.";
+    };
+
+    const firstOptions: PositionOptions = {
+      enableHighAccuracy: deviceType === "Mobile",
+      timeout: deviceType === "Mobile" ? 30_000 : 25_000,
+      maximumAge: 0,
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      savePosition,
+      (firstError) => {
+        // Some Android devices need a second GPS request before they return a fix.
+        if (deviceType === "Mobile" && (firstError.code === 2 || firstError.code === 3)) {
+          setStatus("GPS is taking longer than usual. Retrying live location…");
+
+          navigator.geolocation.getCurrentPosition(
+            savePosition,
+            (secondError) => setStatus(locationErrorMessage(secondError)),
+            {
+              enableHighAccuracy: true,
+              timeout: 45_000,
+              maximumAge: 0,
+            },
+          );
+          return;
+        }
+
+        setStatus(locationErrorMessage(firstError));
       },
-      (error) => setStatus(error.message || "Unable to get your location."),
-      {
-        enableHighAccuracy: deviceType === "Mobile",
-        timeout: 25_000,
-        maximumAge: 0,
-      },
+      firstOptions,
     );
   }
 
@@ -528,6 +569,10 @@ export default function Home() {
                       referrerPolicy="no-referrer"
                       style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }}
                     />
+                  </div>
+
+                  <div style={{ padding: "9px 14px 12px", borderTop: "1px solid #e5e7eb", color: "#667085", fontSize: 11, lineHeight: 1.45 }}>
+                    Coordinates: {position.latitude.toFixed(6)}, {position.longitude.toFixed(6)}. If the map preview does not load on your phone, your captured coordinates are still saved. Tap <strong>View full map</strong> above to open the location directly.
                   </div>
                 </section>
               ) : null}
