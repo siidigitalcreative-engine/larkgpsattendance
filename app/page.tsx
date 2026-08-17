@@ -594,63 +594,63 @@ export default function Home() {
       <section className="card">
         <div
           style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 18,
-            marginBottom: 2,
+            display: "grid",
+            gap: 4,
+            paddingBottom: 18,
+            marginBottom: 18,
+            borderBottom: "1px solid #eef1f5",
           }}
         >
-          <div style={{ minWidth: 0, paddingTop: 2 }}>
-            <div className="eyebrow">LARK ATTENDANCE</div>
-          </div>
-
-          <button
-            type="button"
-            onClick={refreshAttendancePage}
-            disabled={busy}
-            aria-label="Refresh attendance page"
-            title="Refresh attendance"
+          <div
             style={{
-              flex: "0 0 auto",
-              display: "inline-flex",
+              display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              gap: 7,
-              height: 34,
-              padding: "0 12px",
-              border: "1px solid #e4e7ec",
-              borderRadius: 999,
-              background: "#f8fafc",
-              color: "#475467",
-              fontSize: 12,
-              fontWeight: 700,
-              lineHeight: 1,
-              boxShadow: "0 1px 2px rgba(16, 24, 40, 0.04)",
-              cursor: busy ? "not-allowed" : "pointer",
-              opacity: busy ? 0.55 : 1,
-              WebkitTapHighlightColor: "transparent",
+              justifyContent: "space-between",
+              gap: 12,
             }}
           >
-            <span
-              aria-hidden="true"
+            <div className="eyebrow">LARK ATTENDANCE</div>
+
+            <button
+              type="button"
+              onClick={refreshAttendancePage}
+              disabled={busy}
+              aria-label="Refresh attendance page"
+              title="Refresh attendance"
               style={{
-                display: "inline-grid",
+                width: 32,
+                height: 32,
+                flex: "0 0 32px",
+                display: "grid",
                 placeItems: "center",
-                width: 16,
-                height: 16,
-                fontSize: 16,
+                border: "1px solid #e5e7eb",
+                borderRadius: 8,
+                background: "#ffffff",
+                color: "#667085",
+                fontSize: 17,
                 lineHeight: 1,
-                transform: "translateY(-0.5px)",
+                boxShadow: "0 1px 2px rgba(16, 24, 40, 0.03)",
+                cursor: busy ? "not-allowed" : "pointer",
+                opacity: busy ? 0.5 : 1,
+                WebkitTapHighlightColor: "transparent",
               }}
             >
               ↻
-            </span>
-            <span>Refresh</span>
-          </button>
-        </div>
+            </button>
+          </div>
 
-        <h1 style={{ marginTop: 2 }}>GPS Check-In / Check-Out</h1>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 28,
+              lineHeight: 1.2,
+              letterSpacing: "-0.02em",
+              color: "#1f2329",
+            }}
+          >
+            GPS Check-In / Check-Out
+          </h1>
+        </div>
 
         {loading ? (
           <p className="intro">Loading…</p>
