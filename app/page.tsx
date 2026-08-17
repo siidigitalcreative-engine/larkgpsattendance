@@ -14,6 +14,7 @@ type DeviceType = "Mobile" | "Desktop";
 type AttendanceGroup = "Office" | "Warehouse" | "Promodiser" | "Field Work";
 
 const REMEMBERED_IDENTITY_KEY = "larkAttendanceRememberedIdentity";
+const APP_VERSION_KEY = "larkAttendanceAppVersion";
 
 type Employee = {
   employeeId: string;
@@ -110,6 +111,68 @@ export default function Home() {
     }
 
     void initialize();
+  }, []);
+
+  useEffect(() => {
+    let checking = false;
+
+    async function checkForNewVersion() {
+      if (checking) return;
+      checking = true;
+
+      try {
+        const response = await fetch(`/api/version?ts=${Date.now()}`, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" },
+        });
+        if (!response.ok) return;
+
+        const data = (await response.json()) as { version?: string };
+        const serverVersion = String(data.version || "").trim();
+        if (!serverVersion) return;
+
+        const savedVersion = window.localStorage.getItem(APP_VERSION_KEY);
+
+        // First run after installing this feature: remember the current version.
+        if (!savedVersion) {
+          window.localStorage.setItem(APP_VERSION_KEY, serverVersion);
+          return;
+        }
+
+        if (savedVersion !== serverVersion) {
+          // Save first to prevent a reload loop, then add a cache-busting query.
+          window.localStorage.setItem(APP_VERSION_KEY, serverVersion);
+          const url = new URL(window.location.href);
+          url.searchParams.set("appVersion", serverVersion.slice(0, 16));
+          url.searchParams.set("_refresh", String(Date.now()));
+          window.location.replace(url.toString());
+        }
+      } catch {
+        // Version checking must never block attendance.
+      } finally {
+        checking = false;
+      }
+    }
+
+    void checkForNewVersion();
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void checkForNewVersion();
+      }
+    };
+
+    const onFocus = () => {
+      void checkForNewVersion();
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   useEffect(() => {
@@ -212,6 +275,10 @@ export default function Home() {
 
     setSuccessResult(null);
     setStatus("Your name and mobile number are ready. Tap Verify and Continue.");
+  }
+
+  function refreshAttendancePage() {
+    window.location.reload();
   }
 
   function captureLocation() {
@@ -598,6 +665,10 @@ export default function Home() {
               <button className="primary" type="submit" disabled={busy}>
                 {busy ? "Verifying…" : "Verify and Continue"}
               </button>
+
+              <button className="secondary" type="button" onClick={refreshAttendancePage} disabled={busy}>
+                Refresh Attendance
+              </button>
             </form>
           </>
         ) : (
@@ -739,6 +810,10 @@ export default function Home() {
 
               <button className="primary" type="submit" disabled={busy || !position}>
                 {busy ? "Submitting…" : `Submit ${attendanceType}`}
+              </button>
+
+              <button className="secondary" type="button" onClick={refreshAttendancePage} disabled={busy}>
+                Refresh Attendance
               </button>
 
               <button className="secondary" type="button" onClick={logout} disabled={busy}>
