@@ -101,7 +101,7 @@ export async function POST(request: Request) {
     }
 
     const ageMs = Date.now() - capturedAt;
-    if (ageMs < -30_000 || ageMs > 120_000) {
+    if (ageMs < -30_000 || ageMs > 180_000) {
       return NextResponse.json(
         { error: "Location reading is stale. Capture your location again." },
         { status: 400 },
