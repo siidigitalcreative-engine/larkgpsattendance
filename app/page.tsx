@@ -97,11 +97,7 @@ export default function Home() {
           return;
         }
 
-        const employeeResponse = await fetch("/api/employees", { cache: "no-store" });
-        const employeeData = await employeeResponse.json();
-        if (!employeeResponse.ok) throw new Error(employeeData.error || "Unable to load employee list.");
-
-        setEmployees(employeeData.employees || []);
+        await loadEmployeeOptions();
         setStatus("Select your name and enter your registered mobile number once on this device.");
       } catch (error) {
         setStatus(error instanceof Error ? error.message : "Unable to initialize attendance.");
@@ -187,6 +183,20 @@ export default function Home() {
     return employees.filter((item) => item.employeeName.toLowerCase().includes(query)).slice(0, 20);
   }, [employees, search]);
 
+  async function loadEmployeeOptions() {
+    const employeeResponse = await fetch(`/api/employees?ts=${Date.now()}`, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" },
+    });
+    const employeeData = await employeeResponse.json();
+
+    if (!employeeResponse.ok) {
+      throw new Error(employeeData.error || "Unable to load employee list.");
+    }
+
+    setEmployees(employeeData.employees || []);
+  }
+
   async function verifyIdentity(event: FormEvent) {
     event.preventDefault();
     if (!selectedName) {
@@ -236,27 +246,39 @@ export default function Home() {
 
   async function logout() {
     setBusy(true);
-    await fetch("/api/auth/logout", { method: "POST" });
-
-    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
 
     try {
-      window.localStorage.removeItem(REMEMBERED_IDENTITY_KEY);
-    } catch {
-      // Continue even if local storage is unavailable.
-    }
+      await fetch("/api/auth/logout", { method: "POST" });
 
-    setEmployee(null);
-    setSelectedName("");
-    setSearch("");
-    setMobileNumber("");
-    setPosition(null);
-    setSelectedAttendanceGroup("");
-    setNote("");
-    setAttendanceImage(null);
-    setImagePreviewUrl("");
-    setStatus("Select your name and enter your registered mobile number.");
-    setBusy(false);
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+
+      try {
+        window.localStorage.removeItem(REMEMBERED_IDENTITY_KEY);
+      } catch {
+        // Continue even if local storage is unavailable.
+      }
+
+      setEmployee(null);
+      setSelectedName("");
+      setSearch("");
+      setMobileNumber("");
+      setPosition(null);
+      setSelectedAttendanceGroup("");
+      setNote("");
+      setAttendanceImage(null);
+      setImagePreviewUrl("");
+      setStatus("Loading employee list…");
+
+      // The app may have originally opened with an active session, so the
+      // employee list was never loaded. Fetch it now before showing login.
+      await loadEmployeeOptions();
+
+      setStatus("Select your name and enter your registered mobile number.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to change employee.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function returnToRememberedLogin() {
