@@ -11,7 +11,7 @@ type Position = {
 
 type DeviceType = "Mobile" | "Desktop";
 
-type AttendanceGroup = "Office" | "Warehouse" | "Promodiser" | "Field Work";
+type AttendanceGroup = string;
 
 const REMEMBERED_IDENTITY_KEY = "larkAttendanceRememberedIdentity";
 const APP_VERSION_KEY = "larkAttendanceAppVersion";
