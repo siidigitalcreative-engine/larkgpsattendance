@@ -3,7 +3,7 @@ import crypto from "crypto";
 export const SESSION_COOKIE_NAME = "lark_attendance_session";
 const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 365 * 10;
 
-export type AttendanceGroup = "Office" | "Warehouse" | "Promodiser" | "Field Work";
+export type AttendanceGroup = string;
 
 type SessionPayload = {
   employeeId: string;
@@ -62,14 +62,15 @@ export function verifySessionToken(token?: string | null): SessionPayload | null
 
   try {
     const payload = JSON.parse(decode(encodedPayload)) as SessionPayload;
-    const validGroups: AttendanceGroup[] = ["Office", "Warehouse", "Promodiser", "Field Work"];
 
     if (
       !payload.employeeId ||
       !payload.employeeName ||
       !Array.isArray(payload.attendanceGroups) ||
       payload.attendanceGroups.length === 0 ||
-      !payload.attendanceGroups.every((group) => validGroups.includes(group)) ||
+      !payload.attendanceGroups.every(
+        (group) => typeof group === "string" && group.trim().length > 0,
+      ) ||
       payload.exp <= Math.floor(Date.now() / 1000)
     ) {
       return null;
