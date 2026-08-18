@@ -4,7 +4,7 @@ type TenantTokenResponse = {
   tenant_access_token?: string;
 };
 
-export type AttendanceGroup = "Office" | "Warehouse" | "Promodiser" | "Field Work";
+export type AttendanceGroup = string;
 type DeviceType = "Mobile" | "Desktop";
 type LocationMethod = "Live GPS" | "Approximate Desktop Location";
 
@@ -87,16 +87,13 @@ export async function listActiveEmployees(): Promise<EmployeeRecord[]> {
       const department = String(fields["Department"] ?? "").trim();
       const mobileNumber = String(fields["Mobile Number"] ?? "").trim();
       const rawAttendanceGroups = fields["Attendance Group"];
-      const validGroups: AttendanceGroup[] = ["Office", "Warehouse", "Promodiser", "Field Work"];
       const attendanceGroups = (
         Array.isArray(rawAttendanceGroups)
           ? rawAttendanceGroups.map((value) => String(value).trim())
           : String(rawAttendanceGroups ?? "")
               .split(",")
               .map((value) => value.trim())
-      ).filter((group): group is AttendanceGroup =>
-        validGroups.includes(group as AttendanceGroup),
-      );
+      ).filter((group): group is AttendanceGroup => Boolean(group));
       const active = parseActive(fields.Active);
 
       if (
@@ -284,15 +281,23 @@ function toMultiUrl(url: string) {
 }
 
 function getGroupWebhook(attendanceGroup: AttendanceGroup): string {
-  const webhookByGroup: Record<AttendanceGroup, string | undefined> = {
-    Office: process.env.LARK_GROUP_WEBHOOK_OFFICE,
-    Warehouse: process.env.LARK_GROUP_WEBHOOK_WAREHOUSE,
-    Promodiser: process.env.LARK_GROUP_WEBHOOK_PROMODISER,
-    "Field Work": process.env.LARK_GROUP_WEBHOOK_FIELD_WORK,
-  };
+  const envSuffix = attendanceGroup
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 
-  const webhook = webhookByGroup[attendanceGroup] || process.env.LARK_GROUP_WEBHOOK;
-  if (!webhook) throw new Error(`Missing webhook for attendance group: ${attendanceGroup}`);
+  if (!envSuffix) {
+    throw new Error("Invalid attendance group.");
+  }
+
+  const envName = `LARK_GROUP_WEBHOOK_${envSuffix}`;
+  const webhook = process.env[envName];
+
+  if (!webhook) {
+    throw new Error(`Missing webhook for attendance group: ${attendanceGroup} (${envName})`);
+  }
+
   return webhook;
 }
 
