@@ -15,7 +15,7 @@ const MAX_DESKTOP_ACCURACY_METERS = 50_000;
 
 type DeviceType = "Mobile" | "Desktop";
 type AttendanceType = "Check In" | "Check Out";
-type AttendanceGroup = "Office" | "Warehouse" | "Promodiser" | "Field Work";
+type AttendanceGroup = string;
 
 function parseNumber(value: FormDataEntryValue | null, field: string): number {
   const parsed = Number(value);
@@ -34,9 +34,8 @@ function parseDeviceType(value: FormDataEntryValue | null): DeviceType {
 }
 
 function parseAttendanceGroup(value: FormDataEntryValue | null): AttendanceGroup {
-  const validGroups: AttendanceGroup[] = ["Office", "Warehouse", "Promodiser", "Field Work"];
-  const group = String(value ?? "").trim() as AttendanceGroup;
-  if (!validGroups.includes(group)) throw new Error("Invalid attendance group.");
+  const group = String(value ?? "").trim();
+  if (!group) throw new Error("Invalid attendance group.");
   return group;
 }
 
