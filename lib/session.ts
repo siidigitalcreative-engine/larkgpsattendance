@@ -82,10 +82,20 @@ export function verifySessionToken(token?: string | null): SessionPayload | null
   }
 }
 
-export const sessionCookieOptions = {
+const baseSessionCookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax" as const,
   path: "/",
+};
+
+export const persistentSessionCookieOptions = {
+  ...baseSessionCookieOptions,
   maxAge: SESSION_DURATION_SECONDS,
 };
+
+export const sessionOnlyCookieOptions = {
+  ...baseSessionCookieOptions,
+};
+
+export const sessionCookieOptions = persistentSessionCookieOptions;
