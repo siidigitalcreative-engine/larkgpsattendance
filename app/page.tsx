@@ -205,8 +205,57 @@ export default function Home() {
     setStatus("Ready to capture your location.");
   }
 
-  function refreshAttendancePage() {
-    window.location.reload();
+  async function refreshAttendancePage() {
+    if (busy) return;
+
+    setBusy(true);
+    setStatus("Refreshing attendance form…");
+
+    try {
+      // Re-read the current signed-in employee from the server session.
+      // This resets the form like "Not you?" but does NOT log the employee out.
+      const sessionResponse = await fetch(`/api/auth/session?ts=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
+      const sessionData = await sessionResponse.json();
+
+      if (!sessionResponse.ok || !sessionData.authenticated) {
+        throw new Error("Your attendance session has expired. Please verify your identity again.");
+      }
+
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+        setImagePreviewUrl("");
+      }
+
+      setEmployee(sessionData.employee);
+
+      const groups = (sessionData.employee?.attendanceGroups || []) as AttendanceGroup[];
+      setSelectedAttendanceGroup(groups.length === 1 ? groups[0] : "");
+
+      setAttendanceType("Check In");
+      setPosition(null);
+      setNote("");
+      setAttendanceImage(null);
+      setSuccessResult(null);
+
+      setStatus("Attendance form refreshed. Your employee login is still active.");
+    } catch (error) {
+      setEmployee(null);
+      setSelectedAttendanceGroup("");
+      setPosition(null);
+      setNote("");
+      setAttendanceImage(null);
+      setSuccessResult(null);
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Unable to refresh attendance form.",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function captureLocation() {
@@ -526,7 +575,7 @@ export default function Home() {
               onClick={refreshAttendancePage}
               disabled={busy}
               aria-label="Refresh attendance page"
-              title="Refresh attendance"
+              title="Refresh attendance form"
               style={{
                 flex: "0 0 auto",
                 height: 34,
