@@ -366,7 +366,9 @@ export default function Home() {
     const attendanceGroup =
       employeeGroups.length === 1 ? employeeGroups[0] : selectedAttendanceGroup;
 
-    if (!attendanceGroup) {
+    // Do not block one-group employees if an older/stale client session is missing
+    // attendanceGroups. The server re-reads the current group from Lark on submit.
+    if (employeeGroups.length > 1 && !attendanceGroup) {
       setStatus("Select the attendance group for this check-in/check-out.");
       return;
     }
@@ -382,7 +384,9 @@ export default function Home() {
       formData.set("accuracy", String(position.accuracy));
       formData.set("capturedAt", String(position.capturedAt));
       formData.set("deviceType", deviceType);
-      formData.set("attendanceGroup", attendanceGroup);
+      if (attendanceGroup) {
+        formData.set("attendanceGroup", attendanceGroup);
+      }
       formData.set("note", note.trim());
 
       if (attendanceImage) {
