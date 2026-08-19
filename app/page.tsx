@@ -51,6 +51,7 @@ export default function Home() {
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [selectedName, setSelectedName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
+  const [staySignedIn, setStaySignedIn] = useState(true);
   const [search, setSearch] = useState("");
   const [attendanceType, setAttendanceType] = useState<"Check In" | "Check Out">("Check In");
   const [selectedAttendanceGroup, setSelectedAttendanceGroup] = useState<AttendanceGroup | "">("");
@@ -222,6 +223,7 @@ export default function Home() {
         body: JSON.stringify({
           employeeName: selectedName,
           mobileNumber: `+63${mobileNumber}`,
+          staySignedIn,
         }),
       });
 
@@ -232,7 +234,7 @@ export default function Home() {
       const groups = (data.employee?.attendanceGroups || []) as AttendanceGroup[];
       setSelectedAttendanceGroup(groups.length === 1 ? groups[0] : "");
 
-      setStatus("Identity verified. Your attendance session is active on this browser.");
+      setStatus(staySignedIn ? "Identity verified. You will stay signed in on this device." : "Identity verified for this browser session.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Verification failed.");
     } finally {
@@ -794,6 +796,28 @@ export default function Home() {
                   />
                 </div>
                 <span className="field-hint">Enter the remaining 10 digits, beginning with 9.</span>
+              </label>
+
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  marginTop: 4,
+                  marginBottom: 16,
+                  color: "#344054",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={staySignedIn}
+                  onChange={(event) => setStaySignedIn(event.target.checked)}
+                  style={{ width: 16, height: 16, margin: 0 }}
+                />
+                Stay signed in on this device
               </label>
 
               <button className="primary" type="submit" disabled={busy}>
