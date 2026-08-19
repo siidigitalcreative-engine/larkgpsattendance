@@ -195,9 +195,11 @@ export default function Home() {
     }
 
     const groups = employee?.attendanceGroups || [];
-    setSelectedAttendanceGroup((current) =>
-      groups.length === 1 ? groups[0] : current,
-    );
+
+    // Keep one-group employees auto-selected.
+    // For multi-group employees, clear the previous choice so they can
+    // decide the correct Attendance Group for every Check In / Check Out.
+    setSelectedAttendanceGroup(groups.length === 1 ? groups[0] : "");
 
     setSuccessResult(null);
     setStatus("Ready to capture your location.");
