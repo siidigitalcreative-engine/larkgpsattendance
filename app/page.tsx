@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Position = {
   latitude: number;
@@ -12,6 +12,8 @@ type Position = {
 type DeviceType = "Mobile" | "Desktop";
 
 type AttendanceGroup = string;
+
+const CLIENT_SYNC_VERSION = process.env.NEXT_PUBLIC_ATTENDANCE_SYNC_VERSION || "dev";
 
 type Employee = {
   employeeId: string;
@@ -61,6 +63,22 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [successResult, setSuccessResult] = useState<{ type: "Check In" | "Check Out"; address: string } | null>(null);
+  const busyRef = useRef(false);
+  const hasUnsavedFormRef = useRef(false);
+  const pendingSyncReloadRef = useRef(false);
+
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
+
+  useEffect(() => {
+    const groups = employee?.attendanceGroups || [];
+    hasUnsavedFormRef.current =
+      Boolean(position) ||
+      Boolean(note.trim()) ||
+      Boolean(attendanceImage) ||
+      (groups.length > 1 && Boolean(selectedAttendanceGroup));
+  }, [employee, position, note, attendanceImage, selectedAttendanceGroup]);
 
   useEffect(() => {
     setDeviceType(detectDeviceType());
@@ -89,6 +107,77 @@ export default function Home() {
 
     void initialize();
   }, []);
+
+  useEffect(() => {
+    let stopped = false;
+
+    async function checkSyncVersion() {
+      if (stopped) return;
+
+      try {
+        const response = await fetch(`/api/sync-version?ts=${Date.now()}`, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" },
+        });
+
+        if (!response.ok) return;
+
+        const data = (await response.json()) as { version?: string };
+        const serverVersion = String(data.version || "").trim();
+
+        if (
+          serverVersion &&
+          CLIENT_SYNC_VERSION !== "dev" &&
+          serverVersion !== CLIENT_SYNC_VERSION
+        ) {
+          if (busyRef.current || hasUnsavedFormRef.current) {
+            pendingSyncReloadRef.current = true;
+            return;
+          }
+
+          const url = new URL(window.location.href);
+          url.searchParams.set("_sync", serverVersion.slice(0, 24));
+          window.location.replace(url.toString());
+        }
+      } catch {
+        // Sync checks must never block attendance.
+      }
+    }
+
+    void checkSyncVersion();
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void checkSyncVersion();
+      }
+    };
+
+    const onFocus = () => {
+      void checkSyncVersion();
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      stopped = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
+
+  function applyPendingSyncReloadIfSafe() {
+    if (
+      pendingSyncReloadRef.current &&
+      !busyRef.current &&
+      !hasUnsavedFormRef.current
+    ) {
+      pendingSyncReloadRef.current = false;
+      const url = new URL(window.location.href);
+      url.searchParams.set("_sync_refresh", String(Date.now()));
+      window.location.replace(url.toString());
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -203,59 +292,40 @@ export default function Home() {
 
     setSuccessResult(null);
     setStatus("Ready to capture your location.");
+
+    window.setTimeout(() => {
+      applyPendingSyncReloadIfSafe();
+    }, 0);
   }
 
-  async function refreshAttendancePage() {
+  function refreshAttendancePage() {
     if (busy) return;
 
-    setBusy(true);
-    setStatus("Refreshing attendance form…");
-
-    try {
-      // Re-read the current signed-in employee from the server session.
-      // This resets the form like "Not you?" but does NOT log the employee out.
-      const sessionResponse = await fetch(`/api/auth/session?ts=${Date.now()}`, {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
-      });
-      const sessionData = await sessionResponse.json();
-
-      if (!sessionResponse.ok || !sessionData.authenticated) {
-        throw new Error("Your attendance session has expired. Please verify your identity again.");
-      }
-
-      if (imagePreviewUrl) {
-        URL.revokeObjectURL(imagePreviewUrl);
-        setImagePreviewUrl("");
-      }
-
-      setEmployee(sessionData.employee);
-
-      const groups = (sessionData.employee?.attendanceGroups || []) as AttendanceGroup[];
-      setSelectedAttendanceGroup(groups.length === 1 ? groups[0] : "");
-
-      setAttendanceType("Check In");
-      setPosition(null);
-      setNote("");
-      setAttendanceImage(null);
-      setSuccessResult(null);
-
-      setStatus("Attendance form refreshed. Your employee login is still active.");
-    } catch (error) {
-      setEmployee(null);
-      setSelectedAttendanceGroup("");
-      setPosition(null);
-      setNote("");
-      setAttendanceImage(null);
-      setSuccessResult(null);
-      setStatus(
-        error instanceof Error
-          ? error.message
-          : "Unable to refresh attendance form.",
-      );
-    } finally {
-      setBusy(false);
+    // Reset only the attendance form.
+    // Keep the currently verified employee and their loaded Attendance Groups
+    // exactly as-is so the group selector never disappears after Refresh.
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+      setImagePreviewUrl("");
     }
+
+    const groups = employee?.attendanceGroups || [];
+
+    setAttendanceType("Check In");
+    setPosition(null);
+    setNote("");
+    setAttendanceImage(null);
+    setSuccessResult(null);
+
+    // One group = keep it selected automatically.
+    // Multiple groups = show the selector again with a blank choice.
+    setSelectedAttendanceGroup(groups.length === 1 ? groups[0] : "");
+
+    setStatus("Attendance form refreshed. Your employee login is still active.");
+
+    window.setTimeout(() => {
+      applyPendingSyncReloadIfSafe();
+    }, 0);
   }
 
   async function captureLocation() {
