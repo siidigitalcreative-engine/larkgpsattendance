@@ -132,9 +132,19 @@ export async function POST(request: Request) {
     }
 
     const ageMs = Date.now() - capturedAt;
-    if (ageMs < -30_000 || ageMs > 180_000) {
+    const maxLocationAgeMs =
+      deviceType === "Desktop"
+        ? 15 * 60 * 1000
+        : 3 * 60 * 1000;
+
+    if (ageMs < -30_000 || ageMs > maxLocationAgeMs) {
       return NextResponse.json(
-        { error: "Location reading is stale. Capture your location again." },
+        {
+          error:
+            deviceType === "Desktop"
+              ? "Desktop location has expired. Capture your location again."
+              : "Location reading is stale. Capture your location again.",
+        },
         { status: 400 },
       );
     }
