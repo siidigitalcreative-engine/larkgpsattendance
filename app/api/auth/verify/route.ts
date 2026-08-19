@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { verifyEmployee } from "@/lib/lark";
 import {
   createSessionToken,
+  persistentSessionCookieOptions,
   SESSION_COOKIE_NAME,
-  sessionCookieOptions,
+  sessionOnlyCookieOptions,
 } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -11,6 +12,7 @@ export const runtime = "nodejs";
 type VerifyRequest = {
   employeeName?: unknown;
   mobileNumber?: unknown;
+  staySignedIn?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -21,6 +23,7 @@ export async function POST(request: Request) {
       typeof body.employeeName === "string" ? body.employeeName.trim() : "";
     const mobileNumber =
       typeof body.mobileNumber === "string" ? body.mobileNumber.trim() : "";
+    const staySignedIn = body.staySignedIn !== false;
 
     if (employeeName.length < 2 || mobileNumber.replace(/\D/g, "").length < 10) {
       return NextResponse.json(
@@ -59,7 +62,7 @@ export async function POST(request: Request) {
         department: employee.department,
         attendanceGroups: employee.attendanceGroups,
       }),
-      sessionCookieOptions,
+      staySignedIn ? persistentSessionCookieOptions : sessionOnlyCookieOptions,
     );
 
     return response;
