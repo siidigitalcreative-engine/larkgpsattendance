@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
   createAttendanceRecord,
+  listActiveEmployees,
   sendGroupNotification,
   uploadAttendanceImage,
 } from "@/lib/lark";
@@ -33,10 +34,8 @@ function parseDeviceType(value: FormDataEntryValue | null): DeviceType {
   throw new Error("Invalid device type.");
 }
 
-function parseAttendanceGroup(value: FormDataEntryValue | null): AttendanceGroup {
-  const group = String(value ?? "").trim();
-  if (!group) throw new Error("Invalid attendance group.");
-  return group;
+function parseAttendanceGroup(value: FormDataEntryValue | null): AttendanceGroup | "" {
+  return String(value ?? "").trim();
 }
 
 async function reverseGeocode(latitude: number, longitude: number): Promise<string> {
@@ -76,7 +75,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const attendanceType = parseAttendanceType(formData.get("attendanceType"));
     const deviceType = parseDeviceType(formData.get("deviceType"));
-    const attendanceGroup = parseAttendanceGroup(formData.get("attendanceGroup"));
+    const submittedAttendanceGroup = parseAttendanceGroup(formData.get("attendanceGroup"));
     const latitude = parseNumber(formData.get("latitude"), "latitude");
     const longitude = parseNumber(formData.get("longitude"), "longitude");
     const accuracy = parseNumber(formData.get("accuracy"), "GPS accuracy");
@@ -87,11 +86,44 @@ export async function POST(request: Request) {
     if (longitude < -180 || longitude > 180) throw new Error("Invalid longitude.");
     if (accuracy <= 0) throw new Error("Invalid GPS accuracy.");
 
-    if (!session.attendanceGroups.includes(attendanceGroup)) {
+    // Always re-read the employee's current Attendance Group from Lark Base.
+    // This prevents stale browser/session data from breaking the next Check In/Check Out.
+    const employees = await listActiveEmployees();
+    const currentEmployee = employees.find(
+      (employee) => employee.employeeId === session.employeeId,
+    );
+
+    if (!currentEmployee) {
       return NextResponse.json(
-        { error: "You are not assigned to the selected attendance group." },
+        { error: "Your employee record is inactive or no longer available. Please verify again." },
         { status: 403 },
       );
+    }
+
+    const currentGroups = currentEmployee.attendanceGroups;
+
+    let attendanceGroup: AttendanceGroup;
+
+    if (currentGroups.length === 1) {
+      // One-group employees never need to select a group manually.
+      attendanceGroup = currentGroups[0];
+    } else {
+      // Multi-group employees still choose where they are working for this submission.
+      if (!submittedAttendanceGroup) {
+        return NextResponse.json(
+          { error: "Select the attendance group for this check-in/check-out." },
+          { status: 400 },
+        );
+      }
+
+      if (!currentGroups.includes(submittedAttendanceGroup)) {
+        return NextResponse.json(
+          { error: "You are not assigned to the selected attendance group." },
+          { status: 403 },
+        );
+      }
+
+      attendanceGroup = submittedAttendanceGroup;
     }
 
     const maxMobileAccuracy = Number(process.env.MAX_GPS_ACCURACY_METERS ?? 100);
