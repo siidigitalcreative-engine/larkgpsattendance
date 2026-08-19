@@ -300,36 +300,6 @@ export default function Home() {
     }, 0);
   }
 
-  function refreshAttendancePage() {
-    if (busy) return;
-
-    // Reset only the attendance form.
-    // Keep the currently verified employee and their loaded Attendance Groups
-    // exactly as-is so the group selector never disappears after Refresh.
-    if (imagePreviewUrl) {
-      URL.revokeObjectURL(imagePreviewUrl);
-      setImagePreviewUrl("");
-    }
-
-    const groups = employee?.attendanceGroups || [];
-
-    setAttendanceType("Check In");
-    setPosition(null);
-    setNote("");
-    setAttendanceImage(null);
-    setSuccessResult(null);
-
-    // One group = keep it selected automatically.
-    // Multiple groups = show the selector again with a blank choice.
-    setSelectedAttendanceGroup(groups.length === 1 ? groups[0] : "");
-
-    setStatus("Attendance form refreshed. Your employee login is still active.");
-
-    window.setTimeout(() => {
-      applyPendingSyncReloadIfSafe();
-    }, 0);
-  }
-
   async function captureLocation() {
     setStatus(
       deviceType === "Desktop"
@@ -636,44 +606,12 @@ export default function Home() {
             style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
+              justifyContent: "flex-start",
               gap: 12,
             }}
           >
             <div className="eyebrow">LARK ATTENDANCE</div>
 
-            <button
-              type="button"
-              onClick={refreshAttendancePage}
-              disabled={busy}
-              aria-label="Refresh attendance page"
-              title="Refresh attendance form"
-              style={{
-                flex: "0 0 auto",
-                height: 34,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 7,
-                padding: "0 11px",
-                border: "1px solid #b9ccff",
-                borderRadius: 8,
-                background: "#f2f6ff",
-                color: "#245bdb",
-                fontSize: 12,
-                fontWeight: 700,
-                lineHeight: 1,
-                boxShadow: "0 1px 2px rgba(36, 91, 219, 0.08)",
-                cursor: busy ? "not-allowed" : "pointer",
-                opacity: busy ? 0.55 : 1,
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>
-                ↻
-              </span>
-              <span>Refresh</span>
-            </button>
           </div>
 
           <h1
