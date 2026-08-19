@@ -13,9 +13,6 @@ type DeviceType = "Mobile" | "Desktop";
 
 type AttendanceGroup = string;
 
-const REMEMBERED_IDENTITY_KEY = "larkAttendanceRememberedIdentity";
-const APP_VERSION_KEY = "larkAttendanceAppVersion";
-
 type Employee = {
   employeeId: string;
   employeeName: string;
@@ -68,22 +65,6 @@ export default function Home() {
   useEffect(() => {
     setDeviceType(detectDeviceType());
 
-    try {
-      const remembered = window.localStorage.getItem(REMEMBERED_IDENTITY_KEY);
-      if (remembered) {
-        const parsed = JSON.parse(remembered) as { employeeName?: string; mobileNumber?: string };
-        if (parsed.employeeName) {
-          setSelectedName(parsed.employeeName);
-          setSearch(parsed.employeeName);
-        }
-        if (parsed.mobileNumber) {
-          setMobileNumber(parsed.mobileNumber.replace(/\D/g, "").slice(0, 10));
-        }
-      }
-    } catch {
-      // Ignore unavailable/corrupt local storage and continue normally.
-    }
-
     async function initialize() {
       try {
         const sessionResponse = await fetch("/api/auth/session", { cache: "no-store" });
@@ -107,68 +88,6 @@ export default function Home() {
     }
 
     void initialize();
-  }, []);
-
-  useEffect(() => {
-    let checking = false;
-
-    async function checkForNewVersion() {
-      if (checking) return;
-      checking = true;
-
-      try {
-        const response = await fetch(`/api/version?ts=${Date.now()}`, {
-          cache: "no-store",
-          headers: { "Cache-Control": "no-cache" },
-        });
-        if (!response.ok) return;
-
-        const data = (await response.json()) as { version?: string };
-        const serverVersion = String(data.version || "").trim();
-        if (!serverVersion) return;
-
-        const savedVersion = window.localStorage.getItem(APP_VERSION_KEY);
-
-        // First run after installing this feature: remember the current version.
-        if (!savedVersion) {
-          window.localStorage.setItem(APP_VERSION_KEY, serverVersion);
-          return;
-        }
-
-        if (savedVersion !== serverVersion) {
-          // Save first to prevent a reload loop, then add a cache-busting query.
-          window.localStorage.setItem(APP_VERSION_KEY, serverVersion);
-          const url = new URL(window.location.href);
-          url.searchParams.set("appVersion", serverVersion.slice(0, 16));
-          url.searchParams.set("_refresh", String(Date.now()));
-          window.location.replace(url.toString());
-        }
-      } catch {
-        // Version checking must never block attendance.
-      } finally {
-        checking = false;
-      }
-    }
-
-    void checkForNewVersion();
-
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        void checkForNewVersion();
-      }
-    };
-
-    const onFocus = () => {
-      void checkForNewVersion();
-    };
-
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onFocus);
-
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onFocus);
-    };
   }, []);
 
   useEffect(() => {
@@ -224,19 +143,7 @@ export default function Home() {
       const groups = (data.employee?.attendanceGroups || []) as AttendanceGroup[];
       setSelectedAttendanceGroup(groups.length === 1 ? groups[0] : "");
 
-      try {
-        window.localStorage.setItem(
-          REMEMBERED_IDENTITY_KEY,
-          JSON.stringify({
-            employeeName: data.employee?.employeeName || selectedName,
-            mobileNumber,
-          }),
-        );
-      } catch {
-        // Remembering the form is optional; verification still succeeds.
-      }
-
-      setStatus("Identity verified. Your name and mobile number are remembered on this device.");
+      setStatus("Identity verified. Your attendance session is active on this browser.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Verification failed.");
     } finally {
@@ -251,12 +158,6 @@ export default function Home() {
       await fetch("/api/auth/logout", { method: "POST" });
 
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-
-      try {
-        window.localStorage.removeItem(REMEMBERED_IDENTITY_KEY);
-      } catch {
-        // Continue even if local storage is unavailable.
-      }
 
       setEmployee(null);
       setSelectedName("");
@@ -281,12 +182,10 @@ export default function Home() {
     }
   }
 
-  async function returnToRememberedLogin() {
-    await fetch("/api/auth/logout", { method: "POST" });
-
-    setEmployee(null);
+  function returnToAttendanceForm() {
+    // Keep the signed server session and verified employee.
+    // Only clear the previous attendance form values.
     setPosition(null);
-    setSelectedAttendanceGroup("");
     setNote("");
     setAttendanceImage(null);
 
@@ -295,8 +194,13 @@ export default function Home() {
       setImagePreviewUrl("");
     }
 
+    const groups = employee?.attendanceGroups || [];
+    setSelectedAttendanceGroup((current) =>
+      groups.length === 1 ? groups[0] : current,
+    );
+
     setSuccessResult(null);
-    setStatus("Your name and mobile number are ready. Tap Verify and Continue.");
+    setStatus("Ready to capture your location.");
   }
 
   function refreshAttendancePage() {
@@ -504,7 +408,7 @@ export default function Home() {
       setStatus(`Success: ${attendanceType} recorded.`);
 
       setTimeout(() => {
-        void returnToRememberedLogin();
+        returnToAttendanceForm();
       }, 3000);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Attendance submission failed.");
@@ -582,7 +486,7 @@ export default function Home() {
               fontSize: 12,
             }}
           >
-            Returning to attendance login…
+            Returning to attendance form…
           </p>
         </section>
       </main>
@@ -937,7 +841,7 @@ export default function Home() {
         </div>
 
         <p className="privacy">
-          Your identity stays signed in on this browser until you sign out or clear browser data. Your location is captured only when you tap the location button.
+          Your verified attendance session stays signed in on this browser until you tap “Not you? Change employee” or the session expires. Your location is captured only when you tap the location button.
         </p>
       </section>
     </main>
