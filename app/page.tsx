@@ -738,14 +738,16 @@ export default function Home() {
 
               <label
                 style={{
-                  marginTop: 18,
+                  marginTop: 14,
                   marginBottom: 18,
                   display: "flex",
                   alignItems: "center",
-                  gap: 12,
+                  gap: 10,
                   cursor: "pointer",
-                  background: "transparent",
-                  padding: 0,
+                  background: "#f8fafc",
+                  border: "1px solid #e4e7ec",
+                  borderRadius: 12,
+                  padding: "10px 12px",
                 }}
               >
                 <input
@@ -753,24 +755,42 @@ export default function Home() {
                   checked={staySignedIn}
                   onChange={(event) => setStaySignedIn(event.target.checked)}
                   style={{
-                    width: 24,
-                    height: 24,
+                    width: 18,
+                    height: 18,
                     margin: 0,
                     flex: "0 0 auto",
                     accentColor: "#2f6bff",
                     cursor: "pointer",
                   }}
                 />
-                <strong
+                <div
                   style={{
-                    fontSize: 15,
-                    lineHeight: 1.25,
-                    color: "#344054",
-                    fontWeight: 700,
+                    display: "grid",
+                    gap: 1,
+                    minWidth: 0,
                   }}
                 >
-                  Stay signed in on this device
-                </strong>
+                  <strong
+                    style={{
+                      fontSize: 14,
+                      lineHeight: 1.2,
+                      color: "#1f2329",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Stay signed in
+                  </strong>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      lineHeight: 1.2,
+                      color: "#667085",
+                      fontWeight: 400,
+                    }}
+                  >
+                    Keep me signed in on this device.
+                  </span>
+                </div>
               </label>
 
               <button className="primary" type="submit" disabled={busy}>
