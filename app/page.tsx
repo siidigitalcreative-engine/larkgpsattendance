@@ -738,24 +738,39 @@ export default function Home() {
 
               <label
                 style={{
+                  marginTop: 18,
+                  marginBottom: 18,
                   display: "flex",
                   alignItems: "center",
-                  gap: 10,
-                  marginTop: 4,
-                  marginBottom: 16,
-                  color: "#344054",
-                  fontSize: 13,
-                  fontWeight: 600,
+                  gap: 12,
                   cursor: "pointer",
+                  background: "transparent",
+                  padding: 0,
                 }}
               >
                 <input
                   type="checkbox"
                   checked={staySignedIn}
                   onChange={(event) => setStaySignedIn(event.target.checked)}
-                  style={{ width: 16, height: 16, margin: 0 }}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    margin: 0,
+                    flex: "0 0 auto",
+                    accentColor: "#2f6bff",
+                    cursor: "pointer",
+                  }}
                 />
-                Stay signed in on this device
+                <strong
+                  style={{
+                    fontSize: 15,
+                    lineHeight: 1.25,
+                    color: "#344054",
+                    fontWeight: 700,
+                  }}
+                >
+                  Stay signed in on this device
+                </strong>
               </label>
 
               <button className="primary" type="submit" disabled={busy}>
