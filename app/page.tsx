@@ -46,6 +46,18 @@ function detectDeviceType(): DeviceType {
 }
 
 
+function isSameLocalCalendarDay(first: number, second: number): boolean {
+  const a = new Date(first);
+  const b = new Date(second);
+
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+
 export default function Home() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
@@ -185,6 +197,58 @@ export default function Home() {
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     };
   }, [imagePreviewUrl]);
+
+  // Desktop only: never carry a captured location into a new calendar day.
+  // This handles desktop tabs that stay open overnight while keeping mobile
+  // GPS behavior completely unchanged.
+  useEffect(() => {
+    if (deviceType !== "Desktop" || !position) return;
+
+    const clearPreviousDayDesktopLocation = () => {
+      if (
+        deviceType === "Desktop" &&
+        position &&
+        !isSameLocalCalendarDay(position.capturedAt, Date.now())
+      ) {
+        setPosition(null);
+        setStatus("New day detected. Capture your desktop location again.");
+      }
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        clearPreviousDayDesktopLocation();
+      }
+    };
+
+    const onFocus = () => {
+      clearPreviousDayDesktopLocation();
+    };
+
+    const now = new Date();
+    const nextMidnight = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 1,
+      0,
+      0,
+      1,
+      0,
+    );
+    const midnightTimer = window.setTimeout(
+      clearPreviousDayDesktopLocation,
+      Math.max(1000, nextMidnight.getTime() - now.getTime()),
+    );
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      window.clearTimeout(midnightTimer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [deviceType, position]);
 
   const filteredEmployees = useMemo(() => {
     const query = search.trim().toLowerCase();
