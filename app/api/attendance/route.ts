@@ -132,21 +132,32 @@ export async function POST(request: Request) {
     }
 
     const ageMs = Date.now() - capturedAt;
-    const maxLocationAgeMs =
-      deviceType === "Desktop"
-        ? 15 * 60 * 1000
-        : 3 * 60 * 1000;
 
-    if (ageMs < -30_000 || ageMs > maxLocationAgeMs) {
-      return NextResponse.json(
-        {
-          error:
-            deviceType === "Desktop"
-              ? "Desktop location has expired. Capture your location again."
-              : "Location reading is stale. Capture your location again.",
-        },
-        { status: 400 },
-      );
+    // Mobile keeps the strict live-GPS freshness rule.
+    // Desktop gets a longer window because browser/desktop location can be
+    // slower and some desktop devices can have small clock differences.
+    if (deviceType === "Mobile") {
+      const maxMobileLocationAgeMs = 3 * 60 * 1000;
+
+      if (ageMs < -30_000 || ageMs > maxMobileLocationAgeMs) {
+        return NextResponse.json(
+          { error: "Location reading is stale. Capture your location again." },
+          { status: 400 },
+        );
+      }
+    } else {
+      const maxDesktopLocationAgeMs = 60 * 60 * 1000;
+      const maxDesktopClockSkewMs = 5 * 60 * 1000;
+
+      if (
+        ageMs < -maxDesktopClockSkewMs ||
+        ageMs > maxDesktopLocationAgeMs
+      ) {
+        return NextResponse.json(
+          { error: "Desktop location has expired. Capture your location again." },
+          { status: 400 },
+        );
+      }
     }
 
     if (deviceType === "Mobile" && accuracy > maxMobileAccuracy) {
