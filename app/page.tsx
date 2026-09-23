@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 
 type Position = {
   latitude: number;
@@ -13,7 +13,8 @@ type DeviceType = "Mobile" | "Desktop";
 
 type AttendanceGroup = string;
 
-const CLIENT_SYNC_VERSION = process.env.NEXT_PUBLIC_ATTENDANCE_SYNC_VERSION || "dev";
+const REMEMBERED_IDENTITY_KEY = "larkAttendanceRememberedIdentity";
+const APP_VERSION_KEY = "larkAttendanceAppVersion";
 
 type Employee = {
   employeeId: string;
@@ -46,24 +47,11 @@ function detectDeviceType(): DeviceType {
 }
 
 
-function isSameLocalCalendarDay(first: number, second: number): boolean {
-  const a = new Date(first);
-  const b = new Date(second);
-
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-
 export default function Home() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [selectedName, setSelectedName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
-  const [staySignedIn, setStaySignedIn] = useState(true);
   const [search, setSearch] = useState("");
   const [attendanceType, setAttendanceType] = useState<"Check In" | "Check Out">("Check In");
   const [selectedAttendanceGroup, setSelectedAttendanceGroup] = useState<AttendanceGroup | "">("");
@@ -76,25 +64,25 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [successResult, setSuccessResult] = useState<{ type: "Check In" | "Check Out"; address: string } | null>(null);
-  const busyRef = useRef(false);
-  const hasUnsavedFormRef = useRef(false);
-  const pendingSyncReloadRef = useRef(false);
-
-  useEffect(() => {
-    busyRef.current = busy;
-  }, [busy]);
-
-  useEffect(() => {
-    const groups = employee?.attendanceGroups || [];
-    hasUnsavedFormRef.current =
-      Boolean(position) ||
-      Boolean(note.trim()) ||
-      Boolean(attendanceImage) ||
-      (groups.length > 1 && Boolean(selectedAttendanceGroup));
-  }, [employee, position, note, attendanceImage, selectedAttendanceGroup]);
 
   useEffect(() => {
     setDeviceType(detectDeviceType());
+
+    try {
+      const remembered = window.localStorage.getItem(REMEMBERED_IDENTITY_KEY);
+      if (remembered) {
+        const parsed = JSON.parse(remembered) as { employeeName?: string; mobileNumber?: string };
+        if (parsed.employeeName) {
+          setSelectedName(parsed.employeeName);
+          setSearch(parsed.employeeName);
+        }
+        if (parsed.mobileNumber) {
+          setMobileNumber(parsed.mobileNumber.replace(/\D/g, "").slice(0, 10));
+        }
+      }
+    } catch {
+      // Ignore unavailable/corrupt local storage and continue normally.
+    }
 
     async function initialize() {
       try {
@@ -122,133 +110,72 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    let stopped = false;
+    let checking = false;
 
-    async function checkSyncVersion() {
-      if (stopped) return;
+    async function checkForNewVersion() {
+      if (checking) return;
+      checking = true;
 
       try {
-        const response = await fetch(`/api/sync-version?ts=${Date.now()}`, {
+        const response = await fetch(`/api/version?ts=${Date.now()}`, {
           cache: "no-store",
           headers: { "Cache-Control": "no-cache" },
         });
-
         if (!response.ok) return;
 
         const data = (await response.json()) as { version?: string };
         const serverVersion = String(data.version || "").trim();
+        if (!serverVersion) return;
 
-        if (
-          serverVersion &&
-          CLIENT_SYNC_VERSION !== "dev" &&
-          serverVersion !== CLIENT_SYNC_VERSION
-        ) {
-          if (busyRef.current || hasUnsavedFormRef.current) {
-            pendingSyncReloadRef.current = true;
-            return;
-          }
+        const savedVersion = window.localStorage.getItem(APP_VERSION_KEY);
 
+        // First run after installing this feature: remember the current version.
+        if (!savedVersion) {
+          window.localStorage.setItem(APP_VERSION_KEY, serverVersion);
+          return;
+        }
+
+        if (savedVersion !== serverVersion) {
+          // Save first to prevent a reload loop, then add a cache-busting query.
+          window.localStorage.setItem(APP_VERSION_KEY, serverVersion);
           const url = new URL(window.location.href);
-          url.searchParams.set("_sync", serverVersion.slice(0, 24));
+          url.searchParams.set("appVersion", serverVersion.slice(0, 16));
+          url.searchParams.set("_refresh", String(Date.now()));
           window.location.replace(url.toString());
         }
       } catch {
-        // Sync checks must never block attendance.
+        // Version checking must never block attendance.
+      } finally {
+        checking = false;
       }
     }
 
-    void checkSyncVersion();
+    void checkForNewVersion();
 
     const onVisible = () => {
       if (document.visibilityState === "visible") {
-        void checkSyncVersion();
+        void checkForNewVersion();
       }
     };
 
     const onFocus = () => {
-      void checkSyncVersion();
+      void checkForNewVersion();
     };
 
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onFocus);
 
     return () => {
-      stopped = true;
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onFocus);
     };
   }, []);
-
-  function applyPendingSyncReloadIfSafe() {
-    if (
-      pendingSyncReloadRef.current &&
-      !busyRef.current &&
-      !hasUnsavedFormRef.current
-    ) {
-      pendingSyncReloadRef.current = false;
-      const url = new URL(window.location.href);
-      url.searchParams.set("_sync_refresh", String(Date.now()));
-      window.location.replace(url.toString());
-    }
-  }
 
   useEffect(() => {
     return () => {
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     };
   }, [imagePreviewUrl]);
-
-  // Desktop only: never carry a captured location into a new calendar day.
-  // This handles desktop tabs that stay open overnight while keeping mobile
-  // GPS behavior completely unchanged.
-  useEffect(() => {
-    if (deviceType !== "Desktop" || !position) return;
-
-    const clearPreviousDayDesktopLocation = () => {
-      if (
-        deviceType === "Desktop" &&
-        position &&
-        !isSameLocalCalendarDay(position.capturedAt, Date.now())
-      ) {
-        setPosition(null);
-        setStatus("New day detected. Capture your desktop location again.");
-      }
-    };
-
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        clearPreviousDayDesktopLocation();
-      }
-    };
-
-    const onFocus = () => {
-      clearPreviousDayDesktopLocation();
-    };
-
-    const now = new Date();
-    const nextMidnight = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate() + 1,
-      0,
-      0,
-      1,
-      0,
-    );
-    const midnightTimer = window.setTimeout(
-      clearPreviousDayDesktopLocation,
-      Math.max(1000, nextMidnight.getTime() - now.getTime()),
-    );
-
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onFocus);
-
-    return () => {
-      window.clearTimeout(midnightTimer);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [deviceType, position]);
 
   const filteredEmployees = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -287,7 +214,6 @@ export default function Home() {
         body: JSON.stringify({
           employeeName: selectedName,
           mobileNumber: `+63${mobileNumber}`,
-          staySignedIn,
         }),
       });
 
@@ -298,7 +224,19 @@ export default function Home() {
       const groups = (data.employee?.attendanceGroups || []) as AttendanceGroup[];
       setSelectedAttendanceGroup(groups.length === 1 ? groups[0] : "");
 
-      setStatus(staySignedIn ? "Identity verified. You will stay signed in on this device." : "Identity verified for this browser session.");
+      try {
+        window.localStorage.setItem(
+          REMEMBERED_IDENTITY_KEY,
+          JSON.stringify({
+            employeeName: data.employee?.employeeName || selectedName,
+            mobileNumber,
+          }),
+        );
+      } catch {
+        // Remembering the form is optional; verification still succeeds.
+      }
+
+      setStatus("Identity verified. Your name and mobile number are remembered on this device.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Verification failed.");
     } finally {
@@ -313,6 +251,12 @@ export default function Home() {
       await fetch("/api/auth/logout", { method: "POST" });
 
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+
+      try {
+        window.localStorage.removeItem(REMEMBERED_IDENTITY_KEY);
+      } catch {
+        // Continue even if local storage is unavailable.
+      }
 
       setEmployee(null);
       setSelectedName("");
@@ -337,10 +281,12 @@ export default function Home() {
     }
   }
 
-  function returnToAttendanceForm() {
-    // Keep the signed server session and verified employee.
-    // Only clear the previous attendance form values.
+  async function returnToRememberedLogin() {
+    await fetch("/api/auth/logout", { method: "POST" });
+
+    setEmployee(null);
     setPosition(null);
+    setSelectedAttendanceGroup("");
     setNote("");
     setAttendanceImage(null);
 
@@ -349,32 +295,30 @@ export default function Home() {
       setImagePreviewUrl("");
     }
 
-    const groups = employee?.attendanceGroups || [];
-
-    // Keep one-group employees auto-selected.
-    // For multi-group employees, clear the previous choice so they can
-    // decide the correct Attendance Group for every Check In / Check Out.
-    setSelectedAttendanceGroup(groups.length === 1 ? groups[0] : "");
-
     setSuccessResult(null);
-    setStatus("Ready to capture your location.");
-
-    window.setTimeout(() => {
-      applyPendingSyncReloadIfSafe();
-    }, 0);
+    setStatus("Your name and mobile number are ready. Tap Verify and Continue.");
   }
 
-  async function captureLocation() {
-    setStatus(
-      deviceType === "Desktop"
-        ? "Getting your desktop browser location…"
-        : "Getting your live GPS location…",
-    );
-    setPosition(null);
+  function refreshAttendancePage() {
+    window.location.reload();
+  }
 
+  function locationErrorMessage(error: GeolocationPositionError) {
+    if (error.code === 1) {
+      return "Location access is blocked or unavailable. Please turn on Location and allow this site to use it, then tap Capture Live Location again.";
+    }
+    if (error.code === 2) {
+      return "Please turn on Location and allow this browser to use your location, then tap Capture Live Location again.";
+    }
+    if (error.code === 3) {
+      return "Location is taking a little longer. Keep Location on, then tap Capture Live Location again.";
+    }
+    return error.message || "Unable to get your location.";
+  }
+
+  async function getFreshLocation(): Promise<Position> {
     if (!navigator.geolocation) {
-      setStatus("This browser does not support location services.");
-      return;
+      throw new Error("This browser does not support location services.");
     }
 
     // Where supported, detect a previously blocked permission before asking
@@ -387,45 +331,23 @@ export default function Home() {
         });
 
         if (permission.state === "denied") {
-          setStatus(
-            "Location access is blocked for this site. Please allow Location for this site in your browser settings, then tap Capture Live Location again.",
+          throw new Error(
+            "Location access is blocked for this site. Please allow Location for this site in your browser settings, then try again.",
           );
-          return;
         }
-      } catch {
-        // Continue to the normal browser geolocation request.
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("Location access is blocked")) {
+          throw error;
+        }
+        // Continue to the normal browser geolocation request when the
+        // Permissions API itself is unavailable or unsupported.
       }
     }
 
-    const savePosition = (result: GeolocationPosition) => {
-      setPosition({
-        latitude: result.coords.latitude,
-        longitude: result.coords.longitude,
-        accuracy: result.coords.accuracy,
-        // Use the moment this app receives the location. Some Android browsers
-        // return an older provider timestamp even for a newly requested fix.
-        capturedAt: Date.now(),
+    const requestPosition = (options: PositionOptions) =>
+      new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, options);
       });
-
-      setStatus(
-        deviceType === "Desktop"
-          ? `Desktop location captured with ±${Math.round(result.coords.accuracy)} m accuracy.`
-          : `Live location captured with ±${Math.round(result.coords.accuracy)} m accuracy.`,
-      );
-    };
-
-    const locationErrorMessage = (error: GeolocationPositionError) => {
-      if (error.code === 1) {
-        return "Location access is blocked or unavailable. Please turn on Location and allow this site to use it, then tap Capture Live Location again.";
-      }
-      if (error.code === 2) {
-        return "Please turn on Location and allow this browser to use your location, then tap Capture Live Location again.";
-      }
-      if (error.code === 3) {
-        return "Location is taking a little longer. Keep Location on, then tap Capture Live Location again.";
-      }
-      return error.message || "Unable to get your location.";
-    };
 
     const firstOptions: PositionOptions = {
       enableHighAccuracy: deviceType === "Mobile",
@@ -433,29 +355,68 @@ export default function Home() {
       maximumAge: 0,
     };
 
-    navigator.geolocation.getCurrentPosition(
-      savePosition,
-      (firstError) => {
-        // Some Android devices need a second GPS request before they return a fix.
-        if (deviceType === "Mobile" && (firstError.code === 2 || firstError.code === 3)) {
-          setStatus("GPS is taking longer than usual. Retrying live location…");
+    let result: GeolocationPosition;
 
-          navigator.geolocation.getCurrentPosition(
-            savePosition,
-            (secondError) => setStatus(locationErrorMessage(secondError)),
-            {
-              enableHighAccuracy: true,
-              timeout: 45_000,
-              maximumAge: 0,
-            },
+    try {
+      result = await requestPosition(firstOptions);
+    } catch (error) {
+      const firstError = error as GeolocationPositionError;
+
+      // Some Android devices need a second GPS request before they return a fix.
+      if (
+        deviceType === "Mobile" &&
+        (firstError.code === 2 || firstError.code === 3)
+      ) {
+        setStatus("GPS is taking longer than usual. Retrying live location…");
+
+        try {
+          result = await requestPosition({
+            enableHighAccuracy: true,
+            timeout: 45_000,
+            maximumAge: 0,
+          });
+        } catch (secondError) {
+          throw new Error(
+            locationErrorMessage(secondError as GeolocationPositionError),
           );
-          return;
         }
+      } else {
+        throw new Error(locationErrorMessage(firstError));
+      }
+    }
 
-        setStatus(locationErrorMessage(firstError));
-      },
-      firstOptions,
+    return {
+      latitude: result.coords.latitude,
+      longitude: result.coords.longitude,
+      accuracy: result.coords.accuracy,
+      // Use the moment this app receives the location. Some Android browsers
+      // return an older provider timestamp even for a newly requested fix.
+      capturedAt: Date.now(),
+    };
+  }
+
+  async function captureLocation() {
+    setStatus(
+      deviceType === "Desktop"
+        ? "Getting your desktop browser location…"
+        : "Getting your live GPS location…",
     );
+    setPosition(null);
+
+    try {
+      const freshPosition = await getFreshLocation();
+      setPosition(freshPosition);
+
+      setStatus(
+        deviceType === "Desktop"
+          ? `Desktop location captured with ±${Math.round(freshPosition.accuracy)} m accuracy.`
+          : `Live location captured with ±${Math.round(freshPosition.accuracy)} m accuracy.`,
+      );
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : "Unable to get your location.",
+      );
+    }
   }
 
   function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
@@ -523,56 +484,91 @@ export default function Home() {
     const attendanceGroup =
       employeeGroups.length === 1 ? employeeGroups[0] : selectedAttendanceGroup;
 
-    // Do not block one-group employees if an older/stale client session is missing
-    // attendanceGroups. The server re-reads the current group from Lark on submit.
-    if (employeeGroups.length > 1 && !attendanceGroup) {
+    if (!attendanceGroup) {
       setStatus("Select the attendance group for this check-in/check-out.");
       return;
     }
 
     setBusy(true);
-    setStatus("Saving your attendance…");
 
     try {
-      const formData = new FormData();
-      formData.set("attendanceType", attendanceType);
-      formData.set("latitude", String(position.latitude));
-      formData.set("longitude", String(position.longitude));
-      formData.set("accuracy", String(position.accuracy));
-      formData.set("capturedAt", String(position.capturedAt));
-      formData.set("deviceType", deviceType);
-      if (attendanceGroup) {
+      let submissionPosition = position;
+
+      // The server currently accepts location readings up to 3 minutes old.
+      // Refresh earlier (after 2 minutes) so normal mobile delays, photo upload,
+      // or a slow connection do not cause a stale-location rejection.
+      const locationAgeMs = Date.now() - submissionPosition.capturedAt;
+      const shouldRefreshBeforeSubmit =
+        deviceType === "Mobile" &&
+        (locationAgeMs < -30_000 || locationAgeMs > 120_000);
+
+      if (shouldRefreshBeforeSubmit) {
+        setStatus("Refreshing your live location…");
+        submissionPosition = await getFreshLocation();
+        setPosition(submissionPosition);
+      }
+
+      const submitWithPosition = async (location: Position) => {
+        const formData = new FormData();
+        formData.set("attendanceType", attendanceType);
+        formData.set("latitude", String(location.latitude));
+        formData.set("longitude", String(location.longitude));
+        formData.set("accuracy", String(location.accuracy));
+        formData.set("capturedAt", String(location.capturedAt));
+        formData.set("deviceType", deviceType);
         formData.set("attendanceGroup", attendanceGroup);
+        formData.set("note", note.trim());
+
+        if (attendanceImage) {
+          formData.set("image", attendanceImage);
+        }
+
+        const response = await fetch("/api/attendance", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json();
+        return { response, data };
+      };
+
+      setStatus("Saving your attendance…");
+      let result = await submitWithPosition(submissionPosition);
+
+      // Safety net: if the server still considers the GPS reading stale,
+      // automatically get a new fix and retry the submission once.
+      const serverSaysLocationIsStale =
+        !result.response.ok &&
+        result.response.status === 400 &&
+        typeof result.data?.error === "string" &&
+        /location reading is stale/i.test(result.data.error);
+
+      if (serverSaysLocationIsStale && deviceType === "Mobile") {
+        setStatus("Refreshing your live location…");
+        submissionPosition = await getFreshLocation();
+        setPosition(submissionPosition);
+        setStatus("Fresh location captured. Saving your attendance…");
+        result = await submitWithPosition(submissionPosition);
       }
-      formData.set("note", note.trim());
 
-      if (attendanceImage) {
-        formData.set("image", attendanceImage);
-      }
-
-      const response = await fetch("/api/attendance", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 401) setEmployee(null);
-        throw new Error(data.error || "Attendance submission failed.");
+      if (!result.response.ok) {
+        if (result.response.status === 401) setEmployee(null);
+        throw new Error(result.data?.error || "Attendance submission failed.");
       }
 
       setSuccessResult({
         type: attendanceType,
-        address: data.detectedAddress,
+        address: result.data.detectedAddress,
       });
       setStatus(`Success: ${attendanceType} recorded.`);
 
       setTimeout(() => {
-        returnToAttendanceForm();
+        void returnToRememberedLogin();
       }, 3000);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Attendance submission failed.");
+      setStatus(
+        error instanceof Error ? error.message : "Attendance submission failed.",
+      );
     } finally {
       setBusy(false);
     }
@@ -647,7 +643,7 @@ export default function Home() {
               fontSize: 12,
             }}
           >
-            Returning to attendance form…
+            Returning to attendance login…
           </p>
         </section>
       </main>
@@ -670,12 +666,44 @@ export default function Home() {
             style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "flex-start",
+              justifyContent: "space-between",
               gap: 12,
             }}
           >
             <div className="eyebrow">LARK ATTENDANCE</div>
 
+            <button
+              type="button"
+              onClick={refreshAttendancePage}
+              disabled={busy}
+              aria-label="Refresh attendance page"
+              title="Refresh attendance"
+              style={{
+                flex: "0 0 auto",
+                height: 34,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 7,
+                padding: "0 11px",
+                border: "1px solid #b9ccff",
+                borderRadius: 8,
+                background: "#f2f6ff",
+                color: "#245bdb",
+                fontSize: 12,
+                fontWeight: 700,
+                lineHeight: 1,
+                boxShadow: "0 1px 2px rgba(36, 91, 219, 0.08)",
+                cursor: busy ? "not-allowed" : "pointer",
+                opacity: busy ? 0.55 : 1,
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>
+                ↻
+              </span>
+              <span>Refresh</span>
+            </button>
           </div>
 
           <h1
@@ -798,63 +826,6 @@ export default function Home() {
                   />
                 </div>
                 <span className="field-hint">Enter the remaining 10 digits, beginning with 9.</span>
-              </label>
-
-              <label
-                style={{
-                  marginTop: 14,
-                  marginBottom: 18,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  cursor: "pointer",
-                  background: "#f8fafc",
-                  border: "1px solid #e4e7ec",
-                  borderRadius: 12,
-                  padding: "10px 12px",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={staySignedIn}
-                  onChange={(event) => setStaySignedIn(event.target.checked)}
-                  style={{
-                    width: 18,
-                    height: 18,
-                    margin: 0,
-                    flex: "0 0 auto",
-                    accentColor: "#2f6bff",
-                    cursor: "pointer",
-                  }}
-                />
-                <div
-                  style={{
-                    display: "grid",
-                    gap: 1,
-                    minWidth: 0,
-                  }}
-                >
-                  <strong
-                    style={{
-                      fontSize: 14,
-                      lineHeight: 1.2,
-                      color: "#1f2329",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Stay signed in
-                  </strong>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      lineHeight: 1.2,
-                      color: "#667085",
-                      fontWeight: 400,
-                    }}
-                  >
-                    Keep me signed in on this device.
-                  </span>
-                </div>
               </label>
 
               <button className="primary" type="submit" disabled={busy}>
@@ -1027,7 +998,7 @@ export default function Home() {
         </div>
 
         <p className="privacy">
-          Your verified attendance session stays signed in on this browser until you tap “Not you? Change employee” or the session expires. Your location is captured only when you tap the location button.
+          Your identity stays signed in on this browser until you sign out or clear browser data. Your location is captured only when you tap the location button.
         </p>
       </section>
     </main>
