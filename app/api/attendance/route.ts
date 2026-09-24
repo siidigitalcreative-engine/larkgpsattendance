@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
   createAttendanceRecord,
-  listActiveEmployees,
   sendGroupNotification,
   uploadAttendanceImage,
 } from "@/lib/lark";
@@ -34,8 +33,10 @@ function parseDeviceType(value: FormDataEntryValue | null): DeviceType {
   throw new Error("Invalid device type.");
 }
 
-function parseAttendanceGroup(value: FormDataEntryValue | null): AttendanceGroup | "" {
-  return String(value ?? "").trim();
+function parseAttendanceGroup(value: FormDataEntryValue | null): AttendanceGroup {
+  const group = String(value ?? "").trim();
+  if (!group) throw new Error("Invalid attendance group.");
+  return group;
 }
 
 async function reverseGeocode(latitude: number, longitude: number): Promise<string> {
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const attendanceType = parseAttendanceType(formData.get("attendanceType"));
     const deviceType = parseDeviceType(formData.get("deviceType"));
-    const submittedAttendanceGroup = parseAttendanceGroup(formData.get("attendanceGroup"));
+    const attendanceGroup = parseAttendanceGroup(formData.get("attendanceGroup"));
     const latitude = parseNumber(formData.get("latitude"), "latitude");
     const longitude = parseNumber(formData.get("longitude"), "longitude");
     const accuracy = parseNumber(formData.get("accuracy"), "GPS accuracy");
@@ -86,44 +87,11 @@ export async function POST(request: Request) {
     if (longitude < -180 || longitude > 180) throw new Error("Invalid longitude.");
     if (accuracy <= 0) throw new Error("Invalid GPS accuracy.");
 
-    // Always re-read the employee's current Attendance Group from Lark Base.
-    // This prevents stale browser/session data from breaking the next Check In/Check Out.
-    const employees = await listActiveEmployees();
-    const currentEmployee = employees.find(
-      (employee) => employee.employeeId === session.employeeId,
-    );
-
-    if (!currentEmployee) {
+    if (!session.attendanceGroups.includes(attendanceGroup)) {
       return NextResponse.json(
-        { error: "Your employee record is inactive or no longer available. Please verify again." },
+        { error: "You are not assigned to the selected attendance group." },
         { status: 403 },
       );
-    }
-
-    const currentGroups = currentEmployee.attendanceGroups;
-
-    let attendanceGroup: AttendanceGroup;
-
-    if (currentGroups.length === 1) {
-      // One-group employees never need to select a group manually.
-      attendanceGroup = currentGroups[0];
-    } else {
-      // Multi-group employees still choose where they are working for this submission.
-      if (!submittedAttendanceGroup) {
-        return NextResponse.json(
-          { error: "Select the attendance group for this check-in/check-out." },
-          { status: 400 },
-        );
-      }
-
-      if (!currentGroups.includes(submittedAttendanceGroup)) {
-        return NextResponse.json(
-          { error: "You are not assigned to the selected attendance group." },
-          { status: 403 },
-        );
-      }
-
-      attendanceGroup = submittedAttendanceGroup;
     }
 
     const maxMobileAccuracy = Number(process.env.MAX_GPS_ACCURACY_METERS ?? 100);
@@ -131,33 +99,23 @@ export async function POST(request: Request) {
       throw new Error("Invalid MAX_GPS_ACCURACY_METERS configuration.");
     }
 
+    // Do not reject a fresh GPS fix based on the phone's clock.
+    // `capturedAt` comes from the client device, while Date.now() here comes
+    // from the Vercel server. If the phone clock is several minutes ahead or
+    // behind, a location that was just refreshed can incorrectly appear stale.
+    //
+    // The client already refreshes mobile GPS before submit using
+    // maximumAge: 0, and this route still validates GPS accuracy below.
+    // Keep the timestamp for logging/diagnostics, but do not use cross-device
+    // clock comparison as a submission blocker.
     const ageMs = Date.now() - capturedAt;
-
-    // Mobile keeps the strict live-GPS freshness rule.
-    // Desktop gets a longer window because browser/desktop location can be
-    // slower and some desktop devices can have small clock differences.
-    if (deviceType === "Mobile") {
-      const maxMobileLocationAgeMs = 3 * 60 * 1000;
-
-      if (ageMs < -30_000 || ageMs > maxMobileLocationAgeMs) {
-        return NextResponse.json(
-          { error: "Location reading is stale. Capture your location again." },
-          { status: 400 },
-        );
-      }
-    } else {
-      const maxDesktopLocationAgeMs = 60 * 60 * 1000;
-      const maxDesktopClockSkewMs = 5 * 60 * 1000;
-
-      if (
-        ageMs < -maxDesktopClockSkewMs ||
-        ageMs > maxDesktopLocationAgeMs
-      ) {
-        return NextResponse.json(
-          { error: "Desktop location has expired. Capture your location again." },
-          { status: 400 },
-        );
-      }
+    if (ageMs < -86_400_000 || ageMs > 86_400_000) {
+      console.warn("Attendance location timestamp differs significantly from server time.", {
+        employeeId: session.employeeId,
+        capturedAt,
+        serverTime: Date.now(),
+        ageMs,
+      });
     }
 
     if (deviceType === "Mobile" && accuracy > maxMobileAccuracy) {
