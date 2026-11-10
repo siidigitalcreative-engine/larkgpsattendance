@@ -16,6 +16,10 @@ type AttendanceGroup = string;
 const REMEMBERED_IDENTITY_KEY = "larkAttendanceRememberedIdentity";
 const APP_VERSION_KEY = "larkAttendanceAppVersion";
 
+const MAX_SELECTED_IMAGE_BYTES = 20 * 1024 * 1024;
+const TARGET_UPLOAD_IMAGE_BYTES = 3 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 2000;
+
 type Employee = {
   employeeId: string;
   employeeName: string;
@@ -33,6 +37,124 @@ function formatPhilippineMobileNumber(value: string): string {
   return [digits.slice(0, 3), digits.slice(3, 6), digits.slice(6, 10)]
     .filter(Boolean)
     .join(" ");
+}
+
+function fileSizeMb(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(1);
+}
+
+async function optimizeAttendanceImage(file: File): Promise<File> {
+  if (file.size <= TARGET_UPLOAD_IMAGE_BYTES) {
+    return file;
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Unable to read the selected image."));
+      img.src = objectUrl;
+    });
+
+    let width = image.naturalWidth || image.width;
+    let height = image.naturalHeight || image.height;
+
+    if (!width || !height) {
+      throw new Error("Unable to read the selected image dimensions.");
+    }
+
+    const initialScale = Math.min(
+      1,
+      MAX_IMAGE_DIMENSION / Math.max(width, height),
+    );
+
+    width = Math.max(1, Math.round(width * initialScale));
+    height = Math.max(1, Math.round(height * initialScale));
+
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("Image optimization is not supported on this browser.");
+    }
+
+    const render = async (
+      renderWidth: number,
+      renderHeight: number,
+      quality: number,
+    ): Promise<Blob> => {
+      canvas.width = renderWidth;
+      canvas.height = renderHeight;
+
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, renderWidth, renderHeight);
+      context.drawImage(image, 0, 0, renderWidth, renderHeight);
+
+      return await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error("Unable to optimize the selected image."));
+          },
+          "image/jpeg",
+          quality,
+        );
+      });
+    };
+
+    let renderWidth = width;
+    let renderHeight = height;
+    let bestBlob: Blob | null = null;
+
+    for (let sizePass = 0; sizePass < 4; sizePass += 1) {
+      for (const quality of [0.88, 0.8, 0.72, 0.64, 0.56]) {
+        const blob = await render(renderWidth, renderHeight, quality);
+        bestBlob = blob;
+
+        if (blob.size <= TARGET_UPLOAD_IMAGE_BYTES) {
+          const baseName = file.name.replace(/\.[^.]+$/, "") || "attendance";
+          return new File([blob], `${baseName}-optimized.jpg`, {
+            type: "image/jpeg",
+            lastModified: Date.now(),
+          });
+        }
+      }
+
+      renderWidth = Math.max(640, Math.round(renderWidth * 0.8));
+      renderHeight = Math.max(640, Math.round(renderHeight * 0.8));
+    }
+
+    if (!bestBlob || bestBlob.size > TARGET_UPLOAD_IMAGE_BYTES) {
+      throw new Error(
+        "The selected image could not be reduced enough. Please choose a smaller image.",
+      );
+    }
+
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "attendance";
+    return new File([bestBlob], `${baseName}-optimized.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function readJsonSafely(response: Response) {
+  const responseText = await response.text();
+
+  try {
+    return responseText ? JSON.parse(responseText) : {};
+  } catch {
+    return {
+      error:
+        response.status === 413
+          ? "The attendance image is still too large to submit. Please choose a smaller image."
+          : responseText || "Unexpected server response.",
+    };
+  }
 }
 
 function detectDeviceType(): DeviceType {
@@ -60,6 +182,7 @@ export default function Home() {
   const [note, setNote] = useState("");
   const [attendanceImage, setAttendanceImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const [imageProcessing, setImageProcessing] = useState(false);
   const [status, setStatus] = useState("Loading your attendance account…");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -419,33 +542,65 @@ export default function Home() {
     }
   }
 
-  function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
+  async function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0] ?? null;
 
     if (imagePreviewUrl) {
       URL.revokeObjectURL(imagePreviewUrl);
       setImagePreviewUrl("");
     }
 
+    setAttendanceImage(null);
+
     if (!file) {
-      setAttendanceImage(null);
       return;
     }
 
     if (!file.type.startsWith("image/")) {
       setStatus("Please choose an image file.");
-      event.target.value = "";
+      input.value = "";
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setStatus("Attendance image must be 5 MB or smaller.");
-      event.target.value = "";
+    if (file.size > MAX_SELECTED_IMAGE_BYTES) {
+      setStatus("Attendance image must be 20 MB or smaller.");
+      input.value = "";
       return;
     }
 
-    setAttendanceImage(file);
-    setImagePreviewUrl(URL.createObjectURL(file));
+    setImageProcessing(true);
+    setStatus(
+      file.size > TARGET_UPLOAD_IMAGE_BYTES
+        ? "Optimizing attendance image…"
+        : "Preparing attendance image…",
+    );
+
+    try {
+      const optimizedFile = await optimizeAttendanceImage(file);
+      setAttendanceImage(optimizedFile);
+      setImagePreviewUrl(URL.createObjectURL(optimizedFile));
+
+      if (optimizedFile.size < file.size) {
+        setStatus(
+          `Attendance image optimized from ${fileSizeMb(file.size)} MB to ${fileSizeMb(
+            optimizedFile.size,
+          )} MB. Ready to submit.`,
+        );
+      } else {
+        setStatus("Attendance image ready to submit.");
+      }
+    } catch (error) {
+      setAttendanceImage(null);
+      input.value = "";
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Unable to prepare the attendance image.",
+      );
+    } finally {
+      setImageProcessing(false);
+    }
   }
 
   const mapPreviewUrl = useMemo(() => {
@@ -528,7 +683,7 @@ export default function Home() {
           body: formData,
         });
 
-        const data = await response.json();
+        const data = await readJsonSafely(response);
         return { response, data };
       };
 
@@ -958,9 +1113,10 @@ export default function Home() {
                   type="file"
                   accept="image/*"
                   onChange={handleImageChange}
+                  disabled={busy || imageProcessing}
                   style={{ marginTop: 8 }}
                 />
-                <span className="field-hint">Image file · Max 5 MB</span>
+                <span className="field-hint">Image file · Max 20 MB · Large photos are optimized automatically</span>
               </label>
 
               {imagePreviewUrl ? (
@@ -970,8 +1126,12 @@ export default function Home() {
                 </div>
               ) : null}
 
-              <button className="primary" type="submit" disabled={busy || !position}>
-                {busy ? "Submitting…" : `Submit ${attendanceType}`}
+              <button className="primary" type="submit" disabled={busy || imageProcessing || !position}>
+                {imageProcessing
+                  ? "Optimizing image…"
+                  : busy
+                    ? "Submitting…"
+                    : `Submit ${attendanceType}`}
               </button>
 
 
