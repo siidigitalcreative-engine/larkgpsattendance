@@ -10,7 +10,7 @@ import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session";
 export const runtime = "nodejs";
 
 const MAX_NOTE_LENGTH = 1000;
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_DESKTOP_ACCURACY_METERS = 50_000;
 
 type DeviceType = "Mobile" | "Desktop";
@@ -153,7 +153,7 @@ export async function POST(request: Request) {
       }
       if (imageEntry.size > MAX_IMAGE_BYTES) {
         return NextResponse.json(
-          { error: "Attendance image must be 5 MB or smaller." },
+          { error: "Processed attendance image must be 4 MB or smaller." },
           { status: 400 },
         );
       }
